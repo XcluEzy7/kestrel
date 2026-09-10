@@ -43,9 +43,9 @@ def _hosted_call(tool_name: str, arguments: dict) -> str | None:
     """Call hosted Streamable HTTP MCP when configured; None means local REST."""
     if not HOSTED_MCP_URL:
         return None
-    if not HOSTED_MCP_TOKEN:
-        raise RuntimeError("KESTREL_MCP_TOKEN is required with KESTREL_MCP_URL")
     try:
+        if not HOSTED_MCP_TOKEN:
+            raise RuntimeError("KESTREL_MCP_TOKEN is required with KESTREL_MCP_URL")
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client
 
