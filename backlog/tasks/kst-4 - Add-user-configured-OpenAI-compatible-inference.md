@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:22'
+updated_date: '2026-09-10 23:29'
 labels: []
 dependencies:
   - KST-001
@@ -29,10 +29,10 @@ Let each authenticated user configure an OpenAI-compatible base URL and bearer A
 - [ ] #3 Backend normalizes base URLs and discovers models from GET {base_url}/models
 - [ ] #4 Completion calls use POST {base_url}/chat/completions with selected model
 - [ ] #5 Ollama Cloud works at https://ollama.com/v1 with an API key and local Ollama still works without a key
-- [ ] #6 Credentials are encrypted at rest, redacted from API responses, and excluded from logs
+- [x] #6 Credentials are encrypted at rest, redacted from API responses, and excluded from logs
 - [ ] #7 Hosted deployments block loopback, private-network, metadata-service, unsafe redirect, oversized-response, and unbounded-time SSRF paths
-- [ ] #8 Codex subscription OAuth ships only when research proves a supported OpenAI contract; no borrowed CLI credentials, token scraping, or undocumented credential extraction
-- [ ] #9 Provider contract, URL validation, model discovery, isolation, frontend, and migration tests pass
+- [x] #8 Codex subscription OAuth ships only when research proves a supported OpenAI contract; no borrowed CLI credentials, token scraping, or undocumented credential extraction
+- [x] #9 Provider contract, URL validation, model discovery, isolation, frontend, and migration tests pass
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -47,6 +47,8 @@ Let each authenticated user configure an OpenAI-compatible base URL and bearer A
 Validation found no Codex OAuth contract, no OLLAMA_API_KEY resolution, and provider route/component test gaps; all focused tests passed with two dependency deprecation warnings. Refreshed tracked packaged frontend artifact after rebuilding frontend.
 
 Integrated security audit found high-severity unscoped integration_configs credential fallback; repair required before judge.
+
+Implementer: targeted provider/inference suite 240 passed, 9 skipped, 2 warnings. Audit: PASS, 0 blocking; 77 provider tests passed. Judge: PASS, 0 blocking. Combined gates: backend 4358 passed, 36 skipped; frontend 382 passed; build and lint passed. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider API 401. No authorized Shoo session, so live provider create/test or authenticated UI proof unavailable. Follow-ups remain non-blocking: NAT64 defense-in-depth, response/timeout coverage, empty-key clearing.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
