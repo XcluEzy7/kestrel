@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:29'
+updated_date: '2026-09-10 23:32'
 labels: []
 dependencies:
   - KST-001
@@ -49,6 +49,8 @@ Validation found no Codex OAuth contract, no OLLAMA_API_KEY resolution, and prov
 Integrated security audit found high-severity unscoped integration_configs credential fallback; repair required before judge.
 
 Implementer: targeted provider/inference suite 240 passed, 9 skipped, 2 warnings. Audit: PASS, 0 blocking; 77 provider tests passed. Judge: PASS, 0 blocking. Combined gates: backend 4358 passed, 36 skipped; frontend 382 passed; build and lint passed. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider API 401. No authorized Shoo session, so live provider create/test or authenticated UI proof unavailable. Follow-ups remain non-blocking: NAT64 defense-in-depth, response/timeout coverage, empty-key clearing.
+
+Release boundary: authenticated live provider UI validation remains blocked at Shoo Google credential prompt; no provider save/test claim made. Code/test gates and anonymous auth boundary are verified.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
