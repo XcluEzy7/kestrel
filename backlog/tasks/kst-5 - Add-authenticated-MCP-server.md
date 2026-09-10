@@ -4,7 +4,7 @@ title: Add authenticated MCP server
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:22'
+updated_date: '2026-09-10 23:29'
 labels: []
 dependencies:
   - KST-001
@@ -23,19 +23,21 @@ Let local coding agents manage authenticated Kestrel data through a remote Strea
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Railway-hosted server exposes Streamable HTTP MCP
+- [x] #1 Railway-hosted server exposes Streamable HTTP MCP
 - [ ] #2 User can create, list, and revoke scoped MCP tokens after Google login
-- [ ] #3 Tokens resolve account and profile server-side and never accept caller-selected ownership
-- [ ] #4 Tools cover upload/import, discovery, application pipeline, follow-ups, contacts, skills, learning paths, personal analytics, safe settings, and AI provider selection
-- [ ] #5 Read and write scopes are distinct and secrets never appear in tool output
-- [ ] #6 Upload limits, destructive-action safeguards, write audit records, schemas, and cross-user isolation tests pass
-- [ ] #7 Existing optional MCP packaging and local use remain functional or have a documented migration path
+- [x] #3 Tokens resolve account and profile server-side and never accept caller-selected ownership
+- [x] #4 Tools cover upload/import, discovery, application pipeline, follow-ups, contacts, skills, learning paths, personal analytics, safe settings, and AI provider selection
+- [x] #5 Read and write scopes are distinct and secrets never appear in tool output
+- [x] #6 Upload limits, destructive-action safeguards, write audit records, schemas, and cross-user isolation tests pass
+- [x] #7 Existing optional MCP packaging and local use remain functional or have a documented migration path
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Independent MCP security audit passed: token verification, account/profile ownership, scopes, secret redaction, confirmation gates, audit records, transport auth, and SSRF boundary checks verified. Removed caller-supplied search_profile_id from MCP discovery tools.
+
+Implementer: tests/test_mcp_server.py 20 passed, test_shoo_auth.py 8 passed, test_kst001_account_scoping.py 2 passed, test_extension_auth_ownership.py 3 passed, tools/tests/test_kestrel_mcp.py 20 passed. Audit: PASS, 0 blocking; judge: PASS, 0 blocking. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider/MCP-token APIs and POST /mcp/ return 401. Google browser flow reached credential prompt; authenticated token lifecycle and MCP tool proof unavailable. Non-blocking follow-ups: stored URL scheme validation, token mint rate/cap, CSV status validation, wildcard escaping, CSP.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
