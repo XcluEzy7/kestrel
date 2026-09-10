@@ -41,7 +41,7 @@ docker compose up --build
 | `SHOO_JWKS_URL` | `https://shoo.dev/.well-known/jwks.json` | Shoo signing-key endpoint |
 | `SESSION_COOKIE_SECURE` | `true` | Send session and CSRF cookies only over HTTPS |
 | `SESSION_COOKIE_NAME` | `kestrel_session` | Browser session cookie name |
-| `MCP_RESOURCE_URL` | (empty) | Canonical public URL for hosted MCP resource |
+| `MCP_RESOURCE_URL` | (empty) | Canonical public URL for hosted MCP resource (for example `https://example.com/mcp/`) |
 | `DEBUG` | `false` | Enable debug logging |
 | `PORT` | `8100` | Server port |
 | `FRONTEND_URL` | `http://localhost:8101` | Exact browser origin allowed for credentialed CORS; set to deployed HTTPS origin |
@@ -92,7 +92,7 @@ Set these in the Railway dashboard under your service's **Variables** tab:
 | `SHOO_JWKS_URL` | `https://shoo.dev/.well-known/jwks.json` | Shoo signing-key endpoint |
 | `SESSION_COOKIE_SECURE` | `true` | Keep production session cookies Secure |
 | `SESSION_COOKIE_NAME` | `kestrel_session` | Browser session cookie name |
-| `MCP_RESOURCE_URL` | (empty) | Public MCP URL, for example `https://example.com/mcp` |
+| `MCP_RESOURCE_URL` | (empty) | Public MCP URL, for example `https://example.com/mcp/` |
 | `PORT` | `8100` | Server port (Railway sets this automatically via `$PORT`) |
 
 `DATABASE_URL` and a default `FRONTEND_URL` are pre-configured in the Dockerfile. Set
