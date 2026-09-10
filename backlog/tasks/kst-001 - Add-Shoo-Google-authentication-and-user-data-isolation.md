@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 07:25'
+updated_date: '2026-09-10 19:52'
 labels: []
 dependencies: []
 references:
@@ -82,6 +82,8 @@ Require verified Shoo Google identity for private Kestrel data and bind every pr
 
 <!-- SECTION:NOTES:BEGIN -->
 Implementation started in feat/KST-001-shoo-auth. Old hand-written backlog.md will be removed in favor of Backlog.md CLI records.
+
+Deployment c1417bc7-6e14-4e9b-84a6-38444c15e545 reached SUCCESS without Railway configuration changes. Live /health returned 200 with database connected; anonymous private provider and MCP-token APIs returned 401. Live Settings screenshot captured MCP server tokens form with Read/Write scopes and expiry controls, but token fetch returned 401. Shoo login reached Google Email or phone prompt with no existing browser session, so authenticated separate-profile/provider proof remains unavailable. Docs routes still return 200 because SHOO_AUTH_ENABLED is absent/false in Railway variables; production auth must be enabled before AC4 live proof.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -109,5 +111,11 @@ author: @atomic
 created: 2026-09-10 07:25
 ---
 Implementation stage committed as `3445e372` (`feat(KST-001): add Shoo account authentication`) with non-empty body. Working tree contains no source changes after commit. No push, merge, rebase, or PR performed. Next stage: deterministic full checks, then later Terra implementation/security review.
+---
+
+author: @atomic
+created: 2026-09-10 19:52
+---
+Deployment evidence: health 200, private APIs 401, MCP controls visible, Shoo authenticated browser proof blocked at Google credential prompt. Release remains conditional.
 ---
 <!-- COMMENTS:END -->
