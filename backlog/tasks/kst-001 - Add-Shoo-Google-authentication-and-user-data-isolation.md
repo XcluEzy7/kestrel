@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 22:27'
+updated_date: '2026-09-10 23:22'
 labels: []
 dependencies: []
 references:
@@ -143,5 +143,10 @@ author: @ShooCallbackJudge
 created: 2026-09-10 21:16
 ---
 [judge] FOLLOW-UP frontend/src/pages/LoginPage.tsx:47,62 — useEffect dependency arrays use whole function refs (refreshIdentity/clearIdentity) while the code path only depends on the option objects captured at mount; acceptable today but brittle. Also line 47 sessionStorage.getItem is read without normalization: safeReturnTo re-validates, so a poisoned stored value falls back safely — no security issue, noting for clarity only.
+---
+
+created: 2026-09-10 23:22
+---
+[judge] PASS — combined review @ 92ac826. No blocking. Verified: token verification (services/auth.py:33-58 ES256/kid/iss/aud/pairwise_sub), session+CSRF+expiry (services/auth.py:60-95), ownership gate+CSRF body scan (dependencies.py:33-52,84-95), 30 routers under _private_dependencies (main.py:292-325), SPA containment (main.py:373-385 + test_kestrel_start.py regression), extension account binding (api/extension.py:80-93, tests/test_extension_auth_ownership.py), linear migration chain w5→x6y7z8a9b0c1→y7z8a9b0c1d2→z8a9b0c1d2e3→z9a0b1c2d3e4. FOLLOW-UP (new): src/career_os/api/shoo_auth.py:155-181,203-211 — POST/DELETE /api/auth/shoo/mcp-tokens skip csrf_valid (router mounted without _private_dependencies and _browser_account checks session only); SameSite=lax mitigates cross-site POST and DELETE is preflight-blocked, so no exploitable hole, but add csrf_valid for parity with logout/authorize_private_request.
 ---
 <!-- COMMENTS:END -->
