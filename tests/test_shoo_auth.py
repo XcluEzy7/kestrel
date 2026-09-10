@@ -118,6 +118,43 @@ def test_two_accounts_cannot_read_or_write_each_others_records(db_session: Sessi
     db_session.refresh(app_a)
     assert app_a.notes is None
 
+def test_hostile_origin_cannot_read_credentialed_private_response(
+    db_session: Session, monkeypatch
+):
+    """Credentialed private GETs never expose data to an untrusted origin."""
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    _, profile, token, csrf = _account(db_session, "ps_cors", 25)
+    owner = _client(token, csrf)
+
+    response = owner.get(
+        f"/api/applications?profile_id={profile.id}",
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+@pytest.mark.parametrize("content_type", ["application/merge-patch+json", "Application/JSON; charset=utf-8"])
+def test_foreign_profile_body_rejected_for_all_json_media_types(
+    db_session: Session, monkeypatch, content_type: str
+):
+    """Ownership gate inspects JSON bodies regardless of valid media-type spelling."""
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    _, profile_a, token_a, csrf_a = _account(db_session, "ps_media_a", 23)
+    _, profile_b, _, _ = _account(db_session, "ps_media_b", 24)
+    owner = _client(token_a, csrf_a)
+
+    response = owner.post(
+        "/api/applications",
+        headers={"X-CSRF-Token": csrf_a, "Content-Type": content_type},
+        content=(
+            f'{{"profile_id": {profile_b.id}, "company": "Foreign", "role": "Write"}}'
+        ),
+    )
+
+    assert response.status_code == 404
+    assert db_session.query(Application).filter(Application.profile_id == profile_b.id).count() == 0
+
 
 def test_login_logout_expiry_and_legacy_claim(db_session: Session, monkeypatch):
     """Login sets secure cookies, logout revokes, expiry rejects, claim is explicit."""

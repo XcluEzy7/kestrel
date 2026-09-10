@@ -219,6 +219,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_api_keys(self) -> "Settings":
         """Fail fast if AI provider requires an API key that isn't set."""
+        if self.frontend_url.strip() == "*":
+            raise ValueError(
+                "FRONTEND_URL must be an explicit origin; wildcard credentialed CORS is unsafe."
+            )
         req = self._PROVIDER_KEY_REQUIREMENTS.get(self.ai_provider)
         if req:
             attr, prefix = req

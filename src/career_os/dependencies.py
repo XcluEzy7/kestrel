@@ -53,8 +53,10 @@ async def authorize_private_request(
         request.query_params.get("profile_id"),
     ]
     if request.method not in _SAFE_METHODS:
-        content_type = request.headers.get("content-type", "")
-        if content_type.startswith("application/json"):
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type == "application/json" or (
+            media_type.startswith("application/") and media_type.endswith("+json")
+        ):
             try:
                 body = json.loads(await request.body())
             except json.JSONDecodeError:

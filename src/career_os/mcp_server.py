@@ -6,8 +6,8 @@ tool context carries server-resolved account/profile IDs and scopes.
 
 from __future__ import annotations
 
-import hashlib
 import csv
+import hashlib
 import io
 import json
 from datetime import UTC, datetime
@@ -20,43 +20,55 @@ from sqlalchemy.orm import Session
 
 from career_os.config import settings
 from career_os.database import SessionLocal
+from career_os.migration.csv_import import _process_csv_row
 from career_os.models.auth import Account, MCPToken, ProviderConnection
 from career_os.models.contacts import Contact
 from career_os.models.discovery import DiscoveredJob
 from career_os.models.models import ActivityLog, Application, FollowUp, Profile
-from career_os.schemas.applications import is_valid_transition
 from career_os.models.skills import LearningResource, Skill
+from career_os.schemas.applications import is_valid_transition
 from career_os.schemas.contacts import ContactCreate, ContactUpdate
 from career_os.schemas.follow_ups import FollowUpCreate
+from career_os.schemas.provider_connections import ProviderConnectionUpdate
 from career_os.services.contacts import (
     archive_contact as archive_contact_record,
+)
+from career_os.services.contacts import (
     create_contact as create_contact_record,
+)
+from career_os.services.contacts import (
     update_contact as update_contact_record,
 )
+from career_os.services.discovery import run_discovery as run_discovery_service
 from career_os.services.follow_ups import (
     complete_follow_up as complete_follow_up_record,
+)
+from career_os.services.follow_ups import (
     create_follow_up as create_follow_up_record,
 )
-from career_os.services.discovery import run_discovery as run_discovery_service
 from career_os.services.learning import (
     create_learning_resource as create_learning_resource_record,
+)
+from career_os.services.learning import (
     update_learning_status as update_learning_status_record,
 )
-from career_os.services.skills import (
-    create_skill as create_skill_record,
-    update_skill as update_skill_record,
+from career_os.services.provider_connections import (
+    get_connection as get_provider_connection,
 )
 from career_os.services.provider_connections import (
-    create_connection as create_provider_connection_record,
-    get_connection as get_provider_connection,
     update_connection as update_provider_connection_record,
 )
 from career_os.services.scoring import score_job as score_job_service
-from career_os.schemas.provider_connections import ProviderConnectionUpdate
-from career_os.migration.csv_import import _process_csv_row
+from career_os.services.skills import (
+    create_skill as create_skill_record,
+)
+from career_os.services.skills import (
+    update_skill as update_skill_record,
+)
 
 READ = "mcp:read"
 WRITE = "mcp:write"
+
 
 def _resource_url() -> str:
     configured = settings.mcp_resource_url.strip().rstrip("/")
@@ -82,6 +94,7 @@ def _profile() -> int:
         raise PermissionError("Token has no profile")
     return profile_id
 
+
 def _account() -> int:
     account_id = (_token().claims or {}).get("account_id")
     if not isinstance(account_id, int):
@@ -96,6 +109,28 @@ def _require(scope: str) -> None:
 
 def _db() -> Session:
     return SessionLocal()
+
+
+def _audit(
+    db: Session,
+    *,
+    profile_id: int,
+    action: str,
+    entity_type: str,
+    entity_id: int | None = None,
+    application_id: int | None = None,
+) -> None:
+    """Record hosted MCP mutations in shared activity history."""
+    db.add(
+        ActivityLog(
+            profile_id=profile_id,
+            application_id=application_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action=action,
+            source="mcp",
+        )
+    )
 
 
 class MCPTokenVerifier:
@@ -167,6 +202,7 @@ def _safe(value: object) -> object:
     if isinstance(value, tuple):
         return tuple(_safe(v) for v in value)
     return value
+
 
 def _bounded(value: str, name: str, limit: int) -> str:
     if not isinstance(value, str) or len(value) > limit:
@@ -287,6 +323,7 @@ def list_follow_ups() -> str:
         ]
         return json.dumps(_safe(rows))
 
+
 @mcp.tool()
 def create_contact(
     name: str,
@@ -333,7 +370,16 @@ def create_contact(
     )
     with _db() as db:
         row = create_contact_record(db, payload)
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_contact_created",
+            entity_type="contact",
+            entity_id=row.id,
+        )
+        db.commit()
         return json.dumps(_safe({"id": row.id, "name": row.name, "company": row.company}))
+
 
 @mcp.tool()
 def update_contact(
@@ -375,7 +421,16 @@ def update_contact(
         raise ValueError("At least one contact field is required")
     with _db() as db:
         row = update_contact_record(db, contact_id, ContactUpdate(**changes), profile_id=_profile())
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_contact_updated",
+            entity_type="contact",
+            entity_id=row.id,
+        )
+        db.commit()
         return json.dumps(_safe({"id": row.id, "name": row.name, "company": row.company}))
+
 
 @mcp.tool()
 def archive_contact(contact_id: int, confirm: bool = False) -> str:
@@ -385,7 +440,16 @@ def archive_contact(contact_id: int, confirm: bool = False) -> str:
         return "Refused: pass confirm=true to archive contact"
     with _db() as db:
         row = archive_contact_record(db, contact_id, profile_id=_profile())
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_contact_archived",
+            entity_type="contact",
+            entity_id=row.id,
+        )
+        db.commit()
         return json.dumps({"id": row.id, "archived": True})
+
 
 @mcp.tool()
 def create_follow_up(
@@ -412,7 +476,25 @@ def create_follow_up(
     )
     with _db() as db:
         row = create_follow_up_record(db, payload)
-        return json.dumps(_safe({"id": row.id, "application_id": row.application_id, "due_date": row.due_date.isoformat()}))
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_follow_up_created",
+            entity_type="follow_up",
+            entity_id=row.id,
+            application_id=row.application_id,
+        )
+        db.commit()
+        return json.dumps(
+            _safe(
+                {
+                    "id": row.id,
+                    "application_id": row.application_id,
+                    "due_date": row.due_date.isoformat(),
+                }
+            )
+        )
+
 
 @mcp.tool()
 def complete_follow_up(follow_up_id: int) -> str:
@@ -420,7 +502,24 @@ def complete_follow_up(follow_up_id: int) -> str:
     _require(WRITE)
     with _db() as db:
         row = complete_follow_up_record(db, follow_up_id, profile_id=_profile())
-        return json.dumps(_safe({"id": row.id, "completed_at": row.completed_at.isoformat() if row.completed_at else None}))
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_follow_up_completed",
+            entity_type="follow_up",
+            entity_id=row.id,
+            application_id=row.application_id,
+        )
+        db.commit()
+        return json.dumps(
+            _safe(
+                {
+                    "id": row.id,
+                    "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+                }
+            )
+        )
+
 
 @mcp.tool()
 def import_applications_csv(csv_content: str, confirm: bool = False) -> str:
@@ -448,15 +547,24 @@ def import_applications_csv(csv_content: str, confirm: bool = False) -> str:
                 continue
             db.add(application)
             db.flush()
-            db.add(ActivityLog(
-                profile_id=profile_id,
-                application_id=application.id,
-                entity_type="application",
-                entity_id=application.id,
-                action="mcp_application_imported",
-                source="mcp",
-            ))
+            db.add(
+                ActivityLog(
+                    profile_id=profile_id,
+                    application_id=application.id,
+                    entity_type="application",
+                    entity_id=application.id,
+                    action="mcp_application_imported",
+                    source="mcp",
+                )
+            )
             imported += 1
+        db.commit()
+        _audit(
+            db,
+            profile_id=profile_id,
+            action="mcp_applications_imported",
+            entity_type="application_import",
+        )
         db.commit()
     return json.dumps(_safe({"imported": imported, "skipped": skipped, "warnings": warnings}))
 
@@ -505,6 +613,14 @@ async def run_discovery(
             search_profile_id=search_profile_id,
             trigger="mcp",
         )
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_discovery_run",
+            entity_type="discovery_run",
+            entity_id=result["run_id"],
+        )
+        db.commit()
         return json.dumps(
             _safe(
                 {
@@ -562,6 +678,14 @@ async def score_job(
             job_company=job_company or None,
             job_url=job_url or None,
         )
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_job_scored",
+            entity_type="scored_job",
+            entity_id=scored.id,
+        )
+        db.commit()
         return json.dumps(
             _safe(
                 {
@@ -575,6 +699,7 @@ async def score_job(
                 }
             )
         )
+
 
 @mcp.tool()
 def list_discoveries(search: str = "") -> str:
@@ -602,6 +727,7 @@ def list_discoveries(search: str = "") -> str:
             for x in query.order_by(DiscoveredJob.created_at.desc()).all()
         ]
         return json.dumps(_safe(rows))
+
 
 @mcp.tool()
 def list_skills(search: str = "") -> str:
@@ -654,7 +780,17 @@ def create_skill(
                 "evidence_detail": evidence_detail or None,
             },
         )
-        return json.dumps(_safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency}))
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_skill_created",
+            entity_type="skill",
+            entity_id=skill.id,
+        )
+        db.commit()
+        return json.dumps(
+            _safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency})
+        )
 
 
 @mcp.tool()
@@ -695,7 +831,18 @@ def update_skill(
         raise ValueError("At least one skill field is required")
     with _db() as db:
         skill = update_skill_record(db, skill_id, _profile(), changes)
-        return json.dumps(_safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency}))
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_skill_updated",
+            entity_type="skill",
+            entity_id=skill.id,
+        )
+        db.commit()
+        return json.dumps(
+            _safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency})
+        )
+
 
 @mcp.tool()
 def list_learning_resources(status: str = "") -> str:
@@ -762,7 +909,17 @@ def create_learning_resource(
                 "difficulty": difficulty or None,
             },
         )
-        return json.dumps(_safe({"id": resource.id, "title": resource.title, "status": resource.status}))
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_learning_resource_created",
+            entity_type="learning_resource",
+            entity_id=resource.id,
+        )
+        db.commit()
+        return json.dumps(
+            _safe({"id": resource.id, "title": resource.title, "status": resource.status})
+        )
 
 
 @mcp.tool()
@@ -774,7 +931,16 @@ def update_learning_resource(resource_id: int, status: str) -> str:
         raise ValueError("Invalid learning status")
     with _db() as db:
         resource = update_learning_status_record(db, resource_id, _profile(), status)
+        _audit(
+            db,
+            profile_id=_profile(),
+            action="mcp_learning_resource_updated",
+            entity_type="learning_resource",
+            entity_id=resource.id,
+        )
+        db.commit()
         return json.dumps(_safe({"id": resource.id, "status": resource.status}))
+
 
 @mcp.tool()
 def settings_summary() -> str:
@@ -793,6 +959,7 @@ def settings_summary() -> str:
             }
         )
     )
+
 
 @mcp.tool()
 def list_provider_connections() -> str:
@@ -858,13 +1025,15 @@ def update_provider_connection(
         except LookupError as exc:
             raise ValueError("Provider connection not found") from exc
         result = update_provider_connection_record(db, row, ProviderConnectionUpdate(**changes))
-        db.add(ActivityLog(
-            profile_id=_profile(),
-            entity_type="provider_connection",
-            entity_id=connection_id,
-            action="mcp_provider_connection_updated",
-            source="mcp",
-        ))
+        db.add(
+            ActivityLog(
+                profile_id=_profile(),
+                entity_type="provider_connection",
+                entity_id=connection_id,
+                action="mcp_provider_connection_updated",
+                source="mcp",
+            )
+        )
         db.commit()
         return json.dumps(_safe(result.model_dump(mode="json")))
 
@@ -882,15 +1051,19 @@ def select_provider(connection_id: int) -> str:
             selected = get_provider_connection(db, account, connection_id)
         except LookupError as exc:
             raise ValueError("Provider connection not found") from exc
-        for row in db.query(ProviderConnection).filter(ProviderConnection.account_id == account_id).all():
+        for row in (
+            db.query(ProviderConnection).filter(ProviderConnection.account_id == account_id).all()
+        ):
             row.enabled = row.id == selected.id
-        db.add(ActivityLog(
-            profile_id=_profile(),
-            entity_type="provider_connection",
-            entity_id=selected.id,
-            action="mcp_provider_selected",
-            source="mcp",
-        ))
+        db.add(
+            ActivityLog(
+                profile_id=_profile(),
+                entity_type="provider_connection",
+                entity_id=selected.id,
+                action="mcp_provider_selected",
+                source="mcp",
+            )
+        )
         db.commit()
         return json.dumps({"id": selected.id, "selected": True})
 

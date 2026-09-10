@@ -44,7 +44,7 @@ docker compose up --build
 | `MCP_RESOURCE_URL` | (empty) | Canonical public URL for hosted MCP resource |
 | `DEBUG` | `false` | Enable debug logging |
 | `PORT` | `8100` | Server port |
-| `FRONTEND_URL` | `*` | CORS origin (use `*` when serving from same container) |
+| `FRONTEND_URL` | `http://localhost:8101` | Exact browser origin allowed for credentialed CORS; set to deployed HTTPS origin |
 
 ## Deploy to Railway
 
@@ -95,7 +95,8 @@ Set these in the Railway dashboard under your service's **Variables** tab:
 | `MCP_RESOURCE_URL` | (empty) | Public MCP URL, for example `https://example.com/mcp` |
 | `PORT` | `8100` | Server port (Railway sets this automatically via `$PORT`) |
 
-`DATABASE_URL` and `FRONTEND_URL` are pre-configured in the Dockerfile and do not need to be set.
+`DATABASE_URL` and a default `FRONTEND_URL` are pre-configured in the Dockerfile. Set
+`FRONTEND_URL` to exact public browser origin when deploying a fork or custom domain.
 
 ### Data persistence
 

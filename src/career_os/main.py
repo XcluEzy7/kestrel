@@ -255,15 +255,13 @@ app.add_middleware(
 
 # CORS middleware — added last so it wraps all other middleware
 # (Starlette executes middleware in reverse-addition order).
-_cors_origins: list[str] = (
-    ["*"]
-    if settings.frontend_url == "*"
-    else [
-        settings.frontend_url,
-        "http://localhost:8101",
-        "http://127.0.0.1:8101",
-    ]
-)
+_cors_origins: list[str] = [] if settings.frontend_url == "*" else [settings.frontend_url]
+# Local Vite's alternate loopback hostname is safe only for local deployments.
+# Never grant production APIs credentialed reads from arbitrary local pages.
+if settings.frontend_url.startswith(("http://localhost:", "http://127.0.0.1:")):
+    for _local_origin in ("http://localhost:8101", "http://127.0.0.1:8101"):
+        if _local_origin not in _cors_origins:
+            _cors_origins.append(_local_origin)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,

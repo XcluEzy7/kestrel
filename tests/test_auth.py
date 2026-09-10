@@ -106,3 +106,9 @@ class TestStartupValidation:
         )
         assert s.auth_enabled is True
         assert s.auth_api_key == "my-secret"
+
+    def test_wildcard_frontend_url_rejected(self):
+        from career_os.config import Settings
+
+        with pytest.raises(ValueError, match="FRONTEND_URL must be an explicit origin"):
+            Settings(frontend_url="*")

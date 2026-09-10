@@ -67,7 +67,7 @@ ENV AI_PROVIDER=mock \
     DATABASE_URL=sqlite:///data/career_os.db \
     HOST=0.0.0.0 \
     PORT=8100 \
-    FRONTEND_URL="*"
+    FRONTEND_URL="https://kestrel-production-2597.up.railway.app"
 
 EXPOSE 8100
 
