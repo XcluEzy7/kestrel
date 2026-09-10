@@ -74,6 +74,12 @@ class TestAuthEnabled:
         resp = client.get("/health")
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+    def test_api_documentation_is_not_public(self, path):
+        client = TestClient(_make_app(auth_enabled=True))
+        resp = client.get(path)
+        assert resp.status_code == 401
+
     def test_missing_bearer_prefix_401(self):
         client = TestClient(_make_app(auth_enabled=True))
         resp = client.get(

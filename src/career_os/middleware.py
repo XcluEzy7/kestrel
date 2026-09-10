@@ -10,9 +10,6 @@ from starlette.responses import JSONResponse
 _PUBLIC_PATHS = frozenset(
     {
         "/health",
-        "/docs",
-        "/redoc",
-        "/openapi.json",
         "/api/auth/openrouter/callback",  # browser redirect — PKCE state protects it
         "/api/auth/shoo/login",
         "/api/auth/shoo/logout",
