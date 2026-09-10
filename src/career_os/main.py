@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from career_os import __version__
@@ -204,6 +204,12 @@ app = FastAPI(
 # Hosted remote MCP endpoint. Token verifier resolves account/profile ownership
 # from hashed database records; no caller-supplied profile ID reaches tools.
 app.mount("/mcp", mcp_app())
+
+
+@app.api_route("/mcp", methods=["GET", "POST", "DELETE", "OPTIONS"], include_in_schema=False)
+async def mcp_canonical_redirect() -> RedirectResponse:
+    """Preserve MCP methods while routing the documented URL to mounted app."""
+    return RedirectResponse(url="/mcp/", status_code=307)
 
 # Rate limiting for OAuth endpoints
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402

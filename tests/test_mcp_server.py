@@ -26,6 +26,16 @@ from career_os.mcp_server import (
 )
 
 
+def test_documented_mcp_url_reaches_streamable_transport(client) -> None:
+    response = client.post("/mcp", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/mcp/"
+
+    redirected = client.post("/mcp", follow_redirects=True)
+    assert redirected.status_code == 401
+    assert redirected.headers["content-type"].startswith("application/json")
+
+
 def test_safe_output_removes_credentials_recursively() -> None:
     value = _safe({"name": "agent", "api_key": "hidden", "nested": [{"secret": "x", "ok": 1}]})
     assert value == {"name": "agent", "nested": [{"ok": 1}]}
