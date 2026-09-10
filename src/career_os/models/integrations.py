@@ -8,8 +8,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    ForeignKey,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from career_os.database import Base
 
@@ -29,7 +30,10 @@ class IntegrationConfig(Base):
     __tablename__ = "integration_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     credentials: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON blob
@@ -44,6 +48,8 @@ class IntegrationConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
+
+    account: Mapped["Account | None"] = relationship("Account")  # noqa: F821
 
     def __repr__(self) -> str:
         return f"<IntegrationConfig(name='{self.name}', enabled={self.enabled})>"

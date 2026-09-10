@@ -119,12 +119,12 @@ def me(request: Request, db: Annotated[Session, Depends(get_db)]) -> dict:
     """Return auth state and server-authoritative default profile."""
     session = get_session(db, request.cookies.get(settings.session_cookie_name))
     if session is None:
-        return {"authenticated": False}
+        return {"authenticated": False, "auth_required": settings.shoo_auth_enabled}
     try:
         profile_id = default_profile(session.account).id
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail="Authenticated account has no profile") from exc
-    return {"authenticated": True, "profile_id": profile_id}
+    return {"authenticated": True, "profile_id": profile_id, "auth_required": True}
 
 
 def _token_response(token: MCPToken, secret: str | None = None) -> dict:

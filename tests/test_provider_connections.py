@@ -15,9 +15,22 @@ from career_os.schemas.provider_connections import (
 from career_os.services.provider_connections import (
     _request,
     create_connection,
+    ensure_loopback_policy,
     normalize_base_url,
     validate_target,
 )
+
+
+def test_loopback_provider_rejected_without_explicit_local_policy(monkeypatch):
+    monkeypatch.setattr("career_os.services.provider_connections.settings.debug", False)
+    monkeypatch.delenv("CAREER_OS_ALLOW_LOCAL_PROVIDER_LOOPBACK", raising=False)
+    with pytest.raises(ValueError, match="loopback"):
+        ensure_loopback_policy("http://127.0.0.1:11434/v1/models")
+
+
+def test_loopback_provider_allowed_with_debug_policy(monkeypatch):
+    monkeypatch.setattr("career_os.services.provider_connections.settings.debug", True)
+    ensure_loopback_policy("http://localhost:11434/v1/models")
 
 
 def _account(db: Session, subject: str) -> Account:
@@ -91,6 +104,24 @@ def test_connection_owns_account_and_stores_encrypted_key(db_session: Session):
         ProviderConnectionUpdate(enabled=False),
     )
     assert updated.enabled is False
+
+
+def test_factory_selects_enabled_connection_for_account(db_session: Session):
+    from career_os.ai.factory import AccountProvider, get_ai_provider
+
+    owner = _account(db_session, "factory-owner")
+    create_connection(
+        db_session,
+        owner,
+        ProviderConnectionCreate(
+            display_name="Account model",
+            base_url="https://provider.example/v1",
+            model="account-model",
+        ),
+    )
+    provider = get_ai_provider(db=db_session, account=owner)
+    assert isinstance(provider, AccountProvider)
+    assert provider.connection.model == "account-model"
 
 
 @pytest.mark.asyncio

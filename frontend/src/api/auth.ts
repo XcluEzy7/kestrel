@@ -3,8 +3,8 @@
 import { apiFetch } from "./client";
 
 export type AuthState =
-  | { authenticated: false }
-  | { authenticated: true; profile_id: number };
+  | { authenticated: false; auth_required?: boolean }
+  | { authenticated: true; profile_id: number; auth_required?: boolean };
 
 export interface McpTokenResponse {
   id: number;

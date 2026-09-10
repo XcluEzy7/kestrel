@@ -10,12 +10,19 @@ from career_os.mcp_server import (
     _safe,
     archive_application,
     create_application,
+    create_learning_resource,
+    create_skill,
+    discover_jobs,
     list_discoveries,
     list_learning_resources,
     list_pipeline,
     list_provider_connections,
     list_skills,
     settings_summary,
+    select_provider,
+    update_learning_resource,
+    update_provider_connection,
+    update_skill,
 )
 
 
@@ -39,6 +46,22 @@ def test_hosted_read_domains_have_no_caller_ownership_inputs() -> None:
     ):
         assert "profile_id" not in inspect.signature(tool).parameters
         assert "account_id" not in inspect.signature(tool).parameters
+
+
+def test_hosted_mutation_tools_derive_ownership_and_bound_writes() -> None:
+    for tool in (
+        discover_jobs,
+        create_skill,
+        update_skill,
+        create_learning_resource,
+        update_learning_resource,
+        select_provider,
+        update_provider_connection,
+    ):
+        params = inspect.signature(tool).parameters
+        assert "profile_id" not in params
+        assert "account_id" not in params
+    assert "confirm" not in inspect.signature(select_provider).parameters
 
 @pytest.mark.asyncio
 async def test_verifier_rejects_profile_from_another_account(monkeypatch) -> None:

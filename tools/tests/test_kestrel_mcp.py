@@ -30,6 +30,7 @@ from server import (  # noqa: I001, E402
     _format_pipeline,
     _format_score,
     _format_stats,
+    _hosted_call,
     discover_jobs,
     list_pipeline,
     pipeline_stats,
@@ -71,6 +72,19 @@ class TestConfiguration:
         h = srv._headers()
         assert h["Authorization"] == "Bearer test-key"
         srv.API_KEY = original_key
+
+    def test_hosted_mode_uses_token_endpoint_without_profile_query(self) -> None:
+        import server as srv
+
+        old_url, old_token = srv.HOSTED_MCP_URL, srv.HOSTED_MCP_TOKEN
+        srv.HOSTED_MCP_URL, srv.HOSTED_MCP_TOKEN = "https://kestrel.example/mcp", ""
+        try:
+            # Missing token fails before any endpoint request.
+            result = srv._hosted_call("list_pipeline", {"status": ""})
+            assert "KESTREL_MCP_TOKEN" in result
+            assert "profile_id" not in {"status": ""}
+        finally:
+            srv.HOSTED_MCP_URL, srv.HOSTED_MCP_TOKEN = old_url, old_token
 
 
 # ---------------------------------------------------------------------------

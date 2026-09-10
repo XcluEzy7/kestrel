@@ -23,14 +23,18 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
     "/complete",
     responses={422: {"description": "Validation error"}, 502: {"description": "Bad gateway"}},
 )
-async def ai_complete(request: AICompleteRequest) -> AIResponse:
+async def ai_complete(
+    request: AICompleteRequest,
+    db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
+) -> AIResponse:
     """Generate an AI completion.
 
     Uses the AI provider configured via AI_PROVIDER env var.
     With mock provider, returns deterministic structured responses.
     """
     try:
-        provider = get_ai_provider()
+        provider = get_ai_provider(db=db, account=account)
     except (UnsupportedProviderError, ValueError) as exc:
         raise HTTPException(
             status_code=422,
@@ -60,10 +64,13 @@ async def ai_complete(request: AICompleteRequest) -> AIResponse:
 
 
 @router.get("/provider", responses={422: {"description": "Validation error"}})
-async def get_current_provider() -> dict[str, str]:
+async def get_current_provider(
+    db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
+) -> dict[str, str]:
     """Return the currently configured AI provider name."""
     try:
-        provider = get_ai_provider()
+        provider = get_ai_provider(db=db, account=account)
         return {"provider": provider.name}
     except (UnsupportedProviderError, ValueError) as exc:
         raise HTTPException(

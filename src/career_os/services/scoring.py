@@ -3338,8 +3338,8 @@ async def score_job(
         calibration_examples=calibration_examples,
     )
 
-    # Score via AI provider
-    provider = get_ai_provider()
+    # Score via account-owned provider when available; env fallback otherwise.
+    provider = get_ai_provider(db=db, account=profile.account)
     response = await provider.score(
         job_description=prompt,
         profile_data=profile_data,
@@ -3786,7 +3786,7 @@ async def batch_score_discovery(
     # When enabled: skip jobs below threshold to save LLM costs.
     from career_os.services.embeddings import compute_job_similarities
 
-    provider = get_ai_provider()
+    provider = get_ai_provider(db=db, account=profile.account)
     prefilter_enabled = settings.embedding_prefilter_enabled
     threshold = settings.embedding_prefilter_threshold
 

@@ -12,6 +12,7 @@ Required env vars:
 """
 
 import os
+import asyncio
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -21,6 +22,8 @@ from mcp.server.fastmcp import FastMCP
 KESTREL_URL = os.environ.get("KESTREL_URL", "http://localhost:8100")
 PROFILE_ID = int(os.environ.get("KESTREL_PROFILE_ID", "1"))
 API_KEY = os.environ.get("KESTREL_API_KEY", "")
+HOSTED_MCP_URL = os.environ.get("KESTREL_MCP_URL", "").strip()
+HOSTED_MCP_TOKEN = os.environ.get("KESTREL_MCP_TOKEN", "").strip()
 
 mcp = FastMCP("kestrel")
 
@@ -34,6 +37,33 @@ def _headers() -> dict[str, str]:
     if API_KEY:
         h["Authorization"] = f"Bearer {API_KEY}"
     return h
+
+
+def _hosted_call(tool_name: str, arguments: dict) -> str | None:
+    """Call hosted Streamable HTTP MCP when configured; None means local REST."""
+    if not HOSTED_MCP_URL:
+        return None
+    if not HOSTED_MCP_TOKEN:
+        raise RuntimeError("KESTREL_MCP_TOKEN is required with KESTREL_MCP_URL")
+    try:
+        from mcp import ClientSession
+        from mcp.client.streamable_http import streamable_http_client
+
+        async def call() -> str:
+            async with streamable_http_client(
+                HOSTED_MCP_URL,
+                headers={"Authorization": f"Bearer {HOSTED_MCP_TOKEN}"},
+            ) as (read_stream, write_stream, _session_info):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments)
+                    return "\n".join(
+                        item.text for item in result.content if getattr(item, "type", None) == "text"
+                    )
+
+        return asyncio.run(call())
+    except Exception as exc:
+        return f"Error: {type(exc).__name__}: {str(exc)[:200]}"
 
 
 def _get(path: str, params: dict | None = None) -> dict:
@@ -175,6 +205,11 @@ def list_pipeline(
         order: Sort order (asc, desc). Default: desc
     """
     try:
+        hosted = _hosted_call(
+            "list_pipeline", {"status": status, "search": search}
+        )
+        if hosted is not None:
+            return hosted
         params: dict = {"profile_id": PROFILE_ID, "sort": sort, "order": order}
         if status:
             params["status"] = status
@@ -194,6 +229,9 @@ def list_pipeline(
 def pipeline_stats() -> str:
     """Get pipeline statistics: counts by status, activity trends, follow-up summary."""
     try:
+        hosted = _hosted_call("pipeline_stats", {})
+        if hosted is not None:
+            return hosted
         data = _get("/api/applications/stats", params={"profile_id": PROFILE_ID})
         return _format_stats(data)
     except httpx.HTTPStatusError as e:
@@ -222,6 +260,17 @@ def score_job(
         job_url: Job posting URL (optional)
     """
     try:
+        hosted = _hosted_call(
+            "score_job",
+            {
+                "job_description": job_description,
+                "job_title": job_title,
+                "job_company": job_company,
+                "job_url": job_url,
+            },
+        )
+        if hosted is not None:
+            return hosted
         payload: dict = {
             "profile_id": PROFILE_ID,
             "job_description": job_description,
@@ -261,6 +310,18 @@ def discover_jobs(
         limit_per_source: Max results per source (default: 50)
     """
     try:
+        hosted = _hosted_call(
+            "run_discovery",
+            {
+                "keywords": keywords,
+                "locations": locations,
+                "remote_only": remote_only,
+                "sources": sources,
+                "limit_per_source": limit_per_source,
+            },
+        )
+        if hosted is not None:
+            return hosted
         payload: dict = {
             "profile_id": PROFILE_ID,
             "remote_only": remote_only,

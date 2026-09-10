@@ -3,6 +3,7 @@
 import ipaddress
 import json
 import logging
+import os
 import socket
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,6 +26,24 @@ logger = logging.getLogger(__name__)
 _MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 _METADATA_HOSTS = frozenset({"metadata.google.internal", "metadata", "instance-data.ec2.internal"})
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def local_loopback_allowed() -> bool:
+    """Return whether operator explicitly enabled local provider loopback."""
+    return settings.debug or os.getenv("CAREER_OS_ALLOW_LOCAL_PROVIDER_LOOPBACK", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def ensure_loopback_policy(url: str) -> None:
+    """Reject localhost provider targets unless local/debug policy is enabled."""
+    hostname = (urlsplit(url).hostname or "").lower()
+    if hostname in _LOCAL_HOSTS and not local_loopback_allowed():
+        raise ValueError("Local provider loopback is disabled outside local/debug mode")
 
 
 def normalize_base_url(value: str) -> str:
@@ -171,7 +190,9 @@ async def _request(row: ProviderConnection, method: str, suffix: str, payload: d
     parsed = urlsplit(url)
     local_ollama = row.provider_type in {"ollama", "ollama_local"} and (
         parsed.hostname or ""
-    ).lower() in {"localhost", "127.0.0.1", "::1"}
+    ).lower() in _LOCAL_HOSTS
+    if local_ollama:
+        ensure_loopback_policy(url)
     validated_ip = None if local_ollama else validate_target(url)
     headers = {"Accept": "application/json"}
     request_url: str | httpx.URL = url

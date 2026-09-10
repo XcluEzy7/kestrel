@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from career_os.api.constants import RESP_404
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.schemas.integrations import (
     IntegrationConfigResponse,
     IntegrationConfigUpdate,
@@ -25,20 +27,22 @@ router = APIRouter(prefix="/api/integrations", tags=["integrations"])
 
 @router.get("")
 async def list_all_integrations(
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> IntegrationListResponse:
     """List all known integrations with their configuration status."""
-    integrations = list_integrations(db)
+    integrations = list_integrations(db, account)
     return IntegrationListResponse(integrations=integrations, count=len(integrations))
 
 
 @router.get("/{name}/config", responses=RESP_404)
 async def get_integration_config(
     name: str,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> IntegrationConfigResponse:
     """Get a specific integration's configuration by name."""
-    result = get_integration(db, name)
+    result = get_integration(db, name, account)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Unknown integration: {name}")
     return result
@@ -48,13 +52,14 @@ async def get_integration_config(
 async def update_integration_config(
     name: str,
     payload: IntegrationConfigUpdate,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> IntegrationConfigResponse:
     """Update an integration's configuration (credentials and/or enabled state).
 
     Credentials are merged: only the keys you provide are updated.
     """
-    result = update_integration(db, name, payload)
+    result = update_integration(db, name, payload, account)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Unknown integration: {name}")
     return result
@@ -63,10 +68,11 @@ async def update_integration_config(
 @router.post("/{name}/test", responses=RESP_404)
 async def test_integration(
     name: str,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> IntegrationTestResponse:
     """Test an integration's connection using stored credentials."""
-    result = test_integration_connection(db, name)
+    result = test_integration_connection(db, name, account)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Unknown integration: {name}")
     return result

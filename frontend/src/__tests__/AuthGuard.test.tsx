@@ -34,4 +34,13 @@ describe("AuthGuard", () => {
     expect(await screen.findByText("Private")).toBeInTheDocument();
     expect(mockFetchAuthState).toHaveBeenCalledTimes(1);
   });
+
+  it("renders private route when server reports local auth disabled", async () => {
+    mockFetchAuthState.mockResolvedValue({ authenticated: false, auth_required: false });
+    renderWithProviders(
+      <Routes><Route element={<AuthGuard />}><Route path="/private" element={<div>Private</div>} /></Route></Routes>,
+      { route: "/private" },
+    );
+    expect(await screen.findByText("Private")).toBeInTheDocument();
+  });
 });

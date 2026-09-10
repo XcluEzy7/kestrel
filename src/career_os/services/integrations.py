@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from career_os.models.auth import Account
 from career_os.models.integrations import IntegrationConfig
 from career_os.schemas.integrations import (
     INTEGRATION_REGISTRY,
@@ -20,11 +21,19 @@ from career_os.schemas.integrations import (
 logger = logging.getLogger(__name__)
 
 
-def _ensure_row(db: Session, integration: IntegrationDef) -> IntegrationConfig:
+def _ensure_row(
+    db: Session, integration: IntegrationDef, account: Account | None = None
+) -> IntegrationConfig:
     """Get or create the DB row for a known integration."""
-    row = db.query(IntegrationConfig).filter(IntegrationConfig.name == integration.name).first()
+    query = db.query(IntegrationConfig).filter(IntegrationConfig.name == integration.name)
+    if account is None:
+        query = query.filter(IntegrationConfig.account_id.is_(None))
+    else:
+        query = query.filter(IntegrationConfig.account_id == account.id)
+    row = query.first()
     if row is None:
         row = IntegrationConfig(
+            account_id=account.id if account else None,
             name=integration.name,
             display_name=integration.display_name,
             enabled=False,
@@ -65,21 +74,21 @@ def _build_response(row: IntegrationConfig, defn: IntegrationDef) -> Integration
     )
 
 
-def list_integrations(db: Session) -> list[IntegrationConfigResponse]:
+def list_integrations(db: Session, account: Account | None = None) -> list[IntegrationConfigResponse]:
     """List all known integrations with their configuration status."""
     results: list[IntegrationConfigResponse] = []
     for defn in KNOWN_INTEGRATIONS:
-        row = _ensure_row(db, defn)
+        row = _ensure_row(db, defn, account)
         results.append(_build_response(row, defn))
     return results
 
 
-def get_integration(db: Session, name: str) -> IntegrationConfigResponse | None:
+def get_integration(db: Session, name: str, account: Account | None = None) -> IntegrationConfigResponse | None:
     """Get a single integration's configuration by name."""
     defn = INTEGRATION_REGISTRY.get(name)
     if defn is None:
         return None
-    row = _ensure_row(db, defn)
+    row = _ensure_row(db, defn, account)
     return _build_response(row, defn)
 
 
@@ -129,12 +138,13 @@ def _run_integration_test(
     name: str,
     creds_raw: str | None,
     defn: IntegrationDef,
+    account: Account | None,
 ) -> IntegrationConnectionTestResult | None:
     """Run a connection test if required fields are present, return result."""
     creds = _parse_creds_json(creds_raw)
     if not _has_required_fields(creds, defn):
         return None
-    test_resp = test_integration_connection(db, name)
+    test_resp = test_integration_connection(db, name, account)
     if test_resp is None:
         return None
     return IntegrationConnectionTestResult(
@@ -145,7 +155,7 @@ def _run_integration_test(
 
 
 def update_integration(
-    db: Session, name: str, payload: IntegrationConfigUpdate
+    db: Session, name: str, payload: IntegrationConfigUpdate, account: Account | None = None
 ) -> IntegrationConfigResponse | None:
     """Update an integration's configuration (credentials and/or enabled state).
 
@@ -155,7 +165,7 @@ def update_integration(
     if defn is None:
         return None
 
-    row = _ensure_row(db, defn)
+    row = _ensure_row(db, defn, account)
 
     # Update enabled flag
     if payload.enabled is not None:
@@ -178,7 +188,7 @@ def update_integration(
     # Auto-trigger connection test when credentials are provided and integration is enabled
     test_result: IntegrationConnectionTestResult | None = None
     if row.enabled and payload.credentials is not None:
-        test_result = _run_integration_test(db, name, row.credentials, defn)
+        test_result = _run_integration_test(db, name, row.credentials, defn, account)
         if test_result is not None:
             db.refresh(row)
 
@@ -187,7 +197,7 @@ def update_integration(
     return response
 
 
-def test_integration_connection(db: Session, name: str) -> IntegrationTestResponse | None:
+def test_integration_connection(db: Session, name: str, account: Account | None = None) -> IntegrationTestResponse | None:
     """Test an integration's connection using stored credentials.
 
     Returns None if the integration name is unknown.
@@ -198,7 +208,7 @@ def test_integration_connection(db: Session, name: str) -> IntegrationTestRespon
     if defn is None:
         return None
 
-    row = _ensure_row(db, defn)
+    row = _ensure_row(db, defn, account)
     now = datetime.now(UTC)
 
     # Parse credentials

@@ -138,7 +138,7 @@ async def batch_submit_endpoint(
     except ProfileIncompleteError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    provider = get_ai_provider(payload.provider)
+    provider = get_ai_provider(payload.provider, db=db, account=account)
 
     jobs = [{"id": j.id, "description": j.description} for j in payload.jobs]
 
@@ -177,7 +177,7 @@ async def batch_status_endpoint(
             raise HTTPException(status_code=404, detail="Batch not found")
         provider = mapping.provider
         provider_batch_id = mapping.provider_batch_id
-    ai_provider = get_ai_provider(provider)
+    ai_provider = get_ai_provider(provider, db=db, account=account)
 
     try:
         status = await check_batch_status(ai_provider, provider_batch_id)
@@ -212,7 +212,7 @@ async def batch_results_endpoint(
             raise HTTPException(status_code=404, detail="Batch not found")
         provider = mapping.provider
         provider_batch_id = mapping.provider_batch_id
-    ai_provider = get_ai_provider(provider)
+    ai_provider = get_ai_provider(provider, db=db, account=account)
 
     try:
         results = await retrieve_batch_results(ai_provider, provider_batch_id)

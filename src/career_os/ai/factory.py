@@ -5,6 +5,7 @@ import logging
 import os
 import sqlite3
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from career_os.ai.anthropic_provider import AnthropicProvider
 from career_os.ai.base import AIProvider
@@ -20,8 +21,75 @@ from career_os.ai.openrouter_provider import DEFAULT_MODEL as OPENROUTER_DEFAULT
 from career_os.ai.openrouter_provider import OpenRouterProvider
 from career_os.ai.together_provider import TogetherProvider
 from career_os.ai.xai_provider import XAIProvider
+from career_os.schemas.ai import AIFeature, AIResponse
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from career_os.models.auth import Account, ProviderConnection
 
 logger = logging.getLogger(__name__)
+
+
+def _build_ollama_provider() -> AIProvider:
+    """Build Ollama only when local loopback policy permits its base URL."""
+    from career_os.services.provider_connections import ensure_loopback_policy
+
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ensure_loopback_policy(base_url)
+    return OllamaProvider(base_url=base_url, model=os.getenv("OLLAMA_MODEL", "llama3.3"))
+
+
+class AccountProvider(AIProvider):
+    """AIProvider adapter for one account-owned OpenAI-compatible connection."""
+
+    def __init__(self, connection: "ProviderConnection") -> None:
+        self.connection = connection
+
+    @property
+    def name(self) -> str:
+        return self.connection.provider_type
+
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        feature: AIFeature = AIFeature.complete,
+        context: dict | None = None,
+        **kwargs: object,
+    ) -> AIResponse:
+        from career_os.services.provider_connections import complete
+        from career_os.ai.openrouter_provider import _try_parse_structured
+
+        result = await complete(self.connection, prompt)
+        return AIResponse(
+            content=result.content,
+            provider=self.name,
+            feature=feature,
+            model=result.model,
+            structured=_try_parse_structured(result.content, feature),
+        )
+
+    async def score(
+        self,
+        job_description: str,
+        profile_data: dict,
+        **kwargs: object,
+    ) -> AIResponse:
+        return await self.complete(job_description, feature=AIFeature.score, context=profile_data)
+
+
+def _account_connection(db: "Session", account: "Account") -> "ProviderConnection | None":
+    from career_os.models.auth import ProviderConnection
+
+    return (
+        db.query(ProviderConnection)
+        .filter(
+            ProviderConnection.account_id == account.id,
+            ProviderConnection.enabled.is_(True),
+        )
+        .order_by(ProviderConnection.created_at, ProviderConnection.id)
+        .first()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -87,10 +155,7 @@ _PROVIDER_REGISTRY: dict[str, Callable[[], AIProvider]] = {
         api_key=_resolve_api_key("ANTHROPIC_API_KEY", "anthropic_api_key"),
         model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5"),
     ),
-    "ollama": lambda: OllamaProvider(
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        model=os.getenv("OLLAMA_MODEL", "llama3.3"),
-    ),
+    "ollama": _build_ollama_provider,
     "openai": lambda: OpenAIProvider(
         api_key=_resolve_api_key("OPENAI_API_KEY", "openai_api_key"),
         # `or DEFAULT` (not just getenv's default): a set-but-empty OPENAI_MODEL
@@ -272,14 +337,20 @@ def _build_fallback_chain() -> list[AIProvider] | None:
     return providers
 
 
-def get_ai_provider(provider_name: str | None = None) -> AIProvider:
+def get_ai_provider(
+    provider_name: str | None = None,
+    *,
+    db: "Session | None" = None,
+    account: "Account | None" = None,
+) -> AIProvider:
     """Create and return the configured AI provider.
 
     Resolution order:
-    1. Explicit `provider_name` argument
-    2. AI_PROVIDER_FALLBACK env var (builds a FallbackProvider chain)
-    3. AI_PROVIDER env var
-    4. Default: "mock"
+    1. Explicit account-owned enabled connection (when ``db`` and ``account`` supplied)
+    2. Explicit `provider_name` argument
+    3. AI_PROVIDER_FALLBACK env var (builds a FallbackProvider chain)
+    4. AI_PROVIDER env var
+    5. Default: "mock"
 
     Both "mock" and "demo" resolve to MockProvider — "demo" is a friendlier
     user-facing alias so non-technical users don't think "mock" means broken.
@@ -287,6 +358,13 @@ def get_ai_provider(provider_name: str | None = None) -> AIProvider:
     Raises:
         UnsupportedProviderError: If the provider name is not recognized.
     """
+    if db is not None and account is not None:
+        connection = _account_connection(db, account)
+        if connection is not None and (
+            provider_name is None or provider_name.strip().lower() == connection.provider_type
+        ):
+            return AccountProvider(connection)
+
     # When no explicit name given, check for a fallback chain first
     if provider_name is None:
         chain = _build_fallback_chain()

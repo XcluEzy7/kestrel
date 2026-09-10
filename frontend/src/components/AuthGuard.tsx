@@ -15,9 +15,9 @@ export function AuthGuard() {
   });
 
   if (isPending) return null;
-  if (isError || !data?.authenticated) {
+  if (isError || (!data?.authenticated && data?.auth_required !== false)) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
-  setDefaultProfileId(data.profile_id);
+  if (data?.authenticated) setDefaultProfileId(data.profile_id);
   return <Outlet />;
 }

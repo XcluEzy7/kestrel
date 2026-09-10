@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from career_os.config import settings
 from career_os.database import SessionLocal
-from career_os.models.auth import MCPToken, ProviderConnection
+from career_os.models.auth import Account, MCPToken, ProviderConnection
 from career_os.models.contacts import Contact
 from career_os.models.discovery import DiscoveredJob
 from career_os.models.models import ActivityLog, Application, FollowUp, Profile
@@ -37,6 +37,22 @@ from career_os.services.follow_ups import (
     complete_follow_up as complete_follow_up_record,
     create_follow_up as create_follow_up_record,
 )
+from career_os.services.discovery import run_discovery as run_discovery_service
+from career_os.services.learning import (
+    create_learning_resource as create_learning_resource_record,
+    update_learning_status as update_learning_status_record,
+)
+from career_os.services.skills import (
+    create_skill as create_skill_record,
+    update_skill as update_skill_record,
+)
+from career_os.services.provider_connections import (
+    create_connection as create_provider_connection_record,
+    get_connection as get_provider_connection,
+    update_connection as update_provider_connection_record,
+)
+from career_os.services.scoring import score_job as score_job_service
+from career_os.schemas.provider_connections import ProviderConnectionUpdate
 from career_os.migration.csv_import import _process_csv_row
 
 READ = "mcp:read"
@@ -156,6 +172,27 @@ def _bounded(value: str, name: str, limit: int) -> str:
     if not isinstance(value, str) or len(value) > limit:
         raise ValueError(f"{name} exceeds size limit")
     return value
+
+
+def _bounded_items(value: str, name: str, limit: int = 20) -> list[str]:
+    """Parse bounded comma-separated MCP input."""
+    _bounded(value, name, 2_000)
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    if len(items) > limit or any(len(item) > 255 for item in items):
+        raise ValueError(f"{name} contains too many or oversized items")
+    return items
+
+
+def _job_payload(job: DiscoveredJob) -> dict:
+    return {
+        "id": job.id,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "url": job.url,
+        "remote": job.remote,
+        "fit_score": job.fit_score,
+    }
 
 
 @mcp.tool()
@@ -439,6 +476,106 @@ def account_analytics() -> str:
             counts[status] = counts.get(status, 0) + 1
         return json.dumps({"applications": len(rows), "by_status": counts})
 
+
+@mcp.tool()
+async def run_discovery(
+    keywords: str = "",
+    locations: str = "",
+    remote_only: bool = False,
+    sources: str = "",
+    limit_per_source: int = 25,
+    search_profile_id: int | None = None,
+) -> str:
+    """Run account-owned job discovery using token-derived profile."""
+    _require(WRITE)
+    if not isinstance(limit_per_source, int) or not 1 <= limit_per_source <= 100:
+        raise ValueError("limit_per_source must be between 1 and 100")
+    keyword_values = _bounded_items(keywords, "keywords")
+    location_values = _bounded_items(locations, "locations")
+    source_values = _bounded_items(sources, "sources")
+    with _db() as db:
+        result = await run_discovery_service(
+            db,
+            _profile(),
+            keywords=keyword_values,
+            locations=location_values,
+            remote_only=remote_only,
+            sources=source_values,
+            limit_per_source=limit_per_source,
+            search_profile_id=search_profile_id,
+            trigger="mcp",
+        )
+        return json.dumps(
+            _safe(
+                {
+                    "run_id": result["run_id"],
+                    "total_found": result["total_found"],
+                    "new_jobs": result["new_jobs"],
+                    "duplicates": result["duplicates"],
+                    "jobs": [_job_payload(job) for job in result.get("jobs", [])],
+                    "warnings": result.get("warnings", []),
+                    "sources_queried": result.get("sources_queried", []),
+                }
+            )
+        )
+
+
+@mcp.tool(name="discover_jobs")
+async def discover_jobs(
+    keywords: str = "",
+    locations: str = "",
+    remote_only: bool = False,
+    sources: str = "",
+    limit_per_source: int = 25,
+    search_profile_id: int | None = None,
+) -> str:
+    """Compatibility name for account-owned discovery execution."""
+    return await run_discovery(
+        keywords=keywords,
+        locations=locations,
+        remote_only=remote_only,
+        sources=sources,
+        limit_per_source=limit_per_source,
+        search_profile_id=search_profile_id,
+    )
+
+
+@mcp.tool()
+async def score_job(
+    job_description: str,
+    job_title: str = "",
+    job_company: str = "",
+    job_url: str = "",
+) -> str:
+    """Score job against token-derived profile without accepting ownership input."""
+    _require(WRITE)
+    _bounded(job_description, "job_description", 100_000)
+    _bounded(job_title, "job_title", 500)
+    _bounded(job_company, "job_company", 500)
+    _bounded(job_url, "job_url", 2_048)
+    with _db() as db:
+        scored = await score_job_service(
+            db,
+            _profile(),
+            job_description,
+            job_title=job_title or None,
+            job_company=job_company or None,
+            job_url=job_url or None,
+        )
+        return json.dumps(
+            _safe(
+                {
+                    "id": scored.id,
+                    "fit_score": scored.fit_score,
+                    "readiness_score": scored.readiness_score,
+                    "career_alignment": scored.career_alignment,
+                    "effort_flag": scored.effort_flag,
+                    "prep_level": scored.prep_level,
+                    "reasoning": scored.reasoning,
+                }
+            )
+        )
+
 @mcp.tool()
 def list_discoveries(search: str = "") -> str:
     """Read account-owned discovered jobs."""
@@ -487,6 +624,79 @@ def list_skills(search: str = "") -> str:
         ]
         return json.dumps(_safe(rows))
 
+
+@mcp.tool()
+def create_skill(
+    name: str,
+    category: str,
+    proficiency: str = "beginner",
+    evidence_detail: str = "",
+) -> str:
+    """Create one manual skill owned by token-derived profile."""
+    _require(WRITE)
+    _bounded(name, "name", 255)
+    _bounded(category, "category", 50)
+    _bounded(proficiency, "proficiency", 50)
+    _bounded(evidence_detail, "evidence_detail", 20_000)
+    if category not in {"technical", "domain", "soft", "tools"}:
+        raise ValueError("Invalid skill category")
+    if proficiency not in {"beginner", "intermediate", "advanced", "expert"}:
+        raise ValueError("Invalid skill proficiency")
+    with _db() as db:
+        skill = create_skill_record(
+            db,
+            _profile(),
+            {
+                "name": name,
+                "category": category,
+                "proficiency": proficiency,
+                "evidence_source": "manual",
+                "evidence_detail": evidence_detail or None,
+            },
+        )
+        return json.dumps(_safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency}))
+
+
+@mcp.tool()
+def update_skill(
+    skill_id: int,
+    name: str = "",
+    category: str = "",
+    proficiency: str = "",
+    evidence_detail: str = "",
+    reason: str = "",
+) -> str:
+    """Update account-owned skill and record proficiency history."""
+    _require(WRITE)
+    for value, field, limit in (
+        (name, "name", 255),
+        (category, "category", 50),
+        (proficiency, "proficiency", 50),
+        (evidence_detail, "evidence_detail", 20_000),
+        (reason, "reason", 1_000),
+    ):
+        _bounded(value, field, limit)
+    if category and category not in {"technical", "domain", "soft", "tools"}:
+        raise ValueError("Invalid skill category")
+    if proficiency and proficiency not in {"beginner", "intermediate", "advanced", "expert"}:
+        raise ValueError("Invalid skill proficiency")
+    changes = {
+        key: value
+        for key, value in {
+            "name": name,
+            "category": category,
+            "proficiency": proficiency,
+            "evidence_detail": evidence_detail,
+            "reason": reason,
+        }.items()
+        if value
+    }
+    if not changes:
+        raise ValueError("At least one skill field is required")
+    with _db() as db:
+        skill = update_skill_record(db, skill_id, _profile(), changes)
+        return json.dumps(_safe({"id": skill.id, "name": skill.name, "proficiency": skill.proficiency}))
+
 @mcp.tool()
 def list_learning_resources(status: str = "") -> str:
     """Read account-owned learning resources."""
@@ -511,6 +721,60 @@ def list_learning_resources(status: str = "") -> str:
             for x in query.order_by(LearningResource.created_at.desc()).all()
         ]
         return json.dumps(_safe(rows))
+
+
+@mcp.tool()
+def create_learning_resource(
+    gap_id: int,
+    title: str,
+    url: str = "",
+    provider: str = "",
+    resource_type: str = "free_course",
+    estimated_hours: float | None = None,
+    difficulty: str = "",
+) -> str:
+    """Add account-owned learning resource for a profile gap."""
+    _require(WRITE)
+    _bounded(title, "title", 500)
+    _bounded(url, "url", 2_048)
+    _bounded(provider, "provider", 255)
+    _bounded(resource_type, "resource_type", 50)
+    _bounded(difficulty, "difficulty", 50)
+    if url and not url.startswith(("http://", "https://")):
+        raise ValueError("url must use http or https")
+    if resource_type not in {"free_course", "paid_course", "hands_on_project"}:
+        raise ValueError("Invalid resource type")
+    if difficulty and difficulty not in {"beginner", "intermediate", "advanced", "expert"}:
+        raise ValueError("Invalid difficulty")
+    if estimated_hours is not None and (estimated_hours < 0 or estimated_hours > 10_000):
+        raise ValueError("estimated_hours must be between 0 and 10000")
+    with _db() as db:
+        resource = create_learning_resource_record(
+            db,
+            gap_id,
+            _profile(),
+            {
+                "title": title,
+                "url": url or None,
+                "provider": provider or None,
+                "resource_type": resource_type,
+                "estimated_hours": estimated_hours,
+                "difficulty": difficulty or None,
+            },
+        )
+        return json.dumps(_safe({"id": resource.id, "title": resource.title, "status": resource.status}))
+
+
+@mcp.tool()
+def update_learning_resource(resource_id: int, status: str) -> str:
+    """Advance account-owned learning resource through valid status transitions."""
+    _require(WRITE)
+    _bounded(status, "status", 50)
+    if status not in {"not_started", "in_progress", "completed"}:
+        raise ValueError("Invalid learning status")
+    with _db() as db:
+        resource = update_learning_status_record(db, resource_id, _profile(), status)
+        return json.dumps(_safe({"id": resource.id, "status": resource.status}))
 
 @mcp.tool()
 def settings_summary() -> str:
@@ -550,6 +814,85 @@ def list_provider_connections() -> str:
             .all()
         ]
         return json.dumps(_safe(rows))
+
+
+@mcp.tool()
+def update_provider_connection(
+    connection_id: int,
+    display_name: str = "",
+    base_url: str = "",
+    model: str = "",
+    api_key: str = "",
+    enabled: bool | None = None,
+) -> str:
+    """Update account-owned provider metadata or encrypted credential."""
+    _require(WRITE)
+    for value, field, limit in (
+        (display_name, "display_name", 255),
+        (base_url, "base_url", 2_048),
+        (model, "model", 255),
+        (api_key, "api_key", 4_096),
+    ):
+        _bounded(value, field, limit)
+    if base_url and not base_url.startswith(("http://", "https://")):
+        raise ValueError("base_url must use http or https")
+    changes = {
+        key: value
+        for key, value in {
+            "display_name": display_name,
+            "base_url": base_url,
+            "model": model,
+            "api_key": api_key,
+            "enabled": enabled,
+        }.items()
+        if value not in ("", None)
+    }
+    if not changes:
+        raise ValueError("At least one provider field is required")
+    with _db() as db:
+        account = db.query(Account).filter(Account.id == _account()).first()
+        if account is None:
+            raise PermissionError("Account not found")
+        try:
+            row = get_provider_connection(db, account, connection_id)
+        except LookupError as exc:
+            raise ValueError("Provider connection not found") from exc
+        result = update_provider_connection_record(db, row, ProviderConnectionUpdate(**changes))
+        db.add(ActivityLog(
+            profile_id=_profile(),
+            entity_type="provider_connection",
+            entity_id=connection_id,
+            action="mcp_provider_connection_updated",
+            source="mcp",
+        ))
+        db.commit()
+        return json.dumps(_safe(result.model_dump(mode="json")))
+
+
+@mcp.tool()
+def select_provider(connection_id: int) -> str:
+    """Select one enabled provider for this account; never accepts account ID."""
+    _require(WRITE)
+    with _db() as db:
+        account_id = _account()
+        account = db.query(Account).filter(Account.id == account_id).first()
+        if account is None:
+            raise PermissionError("Account not found")
+        try:
+            selected = get_provider_connection(db, account, connection_id)
+        except LookupError as exc:
+            raise ValueError("Provider connection not found") from exc
+        for row in db.query(ProviderConnection).filter(ProviderConnection.account_id == account_id).all():
+            row.enabled = row.id == selected.id
+        db.add(ActivityLog(
+            profile_id=_profile(),
+            entity_type="provider_connection",
+            entity_id=selected.id,
+            action="mcp_provider_selected",
+            source="mcp",
+        ))
+        db.commit()
+        return json.dumps({"id": selected.id, "selected": True})
 
 
 @mcp.tool()
