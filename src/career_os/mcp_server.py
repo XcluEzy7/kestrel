@@ -592,7 +592,6 @@ async def run_discovery(
     remote_only: bool = False,
     sources: str = "",
     limit_per_source: int = 25,
-    search_profile_id: int | None = None,
 ) -> str:
     """Run account-owned job discovery using token-derived profile."""
     _require(WRITE)
@@ -610,7 +609,6 @@ async def run_discovery(
             remote_only=remote_only,
             sources=source_values,
             limit_per_source=limit_per_source,
-            search_profile_id=search_profile_id,
             trigger="mcp",
         )
         _audit(
@@ -643,7 +641,6 @@ async def discover_jobs(
     remote_only: bool = False,
     sources: str = "",
     limit_per_source: int = 25,
-    search_profile_id: int | None = None,
 ) -> str:
     """Compatibility name for account-owned discovery execution."""
     return await run_discovery(
@@ -652,7 +649,6 @@ async def discover_jobs(
         remote_only=remote_only,
         sources=sources,
         limit_per_source=limit_per_source,
-        search_profile_id=search_profile_id,
     )
 
 

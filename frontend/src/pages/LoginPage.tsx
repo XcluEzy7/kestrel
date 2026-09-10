@@ -39,7 +39,10 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const from = safeReturnTo(
+    (location.state as { from?: string } | null)?.from ?? null,
+    "/",
+  );
   const callbackPending = authClient?.parseCallback() !== null;
 
   useEffect(() => {
