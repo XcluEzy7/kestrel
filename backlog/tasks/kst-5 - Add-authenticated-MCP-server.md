@@ -4,6 +4,7 @@ title: Add authenticated MCP server
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
+updated_date: '2026-09-10 22:01'
 labels: []
 dependencies:
   - KST-001
@@ -30,3 +31,9 @@ Let local coding agents manage authenticated Kestrel data through a remote Strea
 - [ ] #6 Upload limits, destructive-action safeguards, write audit records, schemas, and cross-user isolation tests pass
 - [ ] #7 Existing optional MCP packaging and local use remain functional or have a documented migration path
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Independent MCP security audit passed: token verification, account/profile ownership, scopes, secret redaction, confirmation gates, audit records, transport auth, and SSRF boundary checks verified. Removed caller-supplied search_profile_id from MCP discovery tools.
+<!-- SECTION:NOTES:END -->
