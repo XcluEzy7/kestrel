@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 21:01'
+updated_date: '2026-09-10 21:04'
 labels: []
 dependencies: []
 references:
@@ -88,6 +88,8 @@ Deployment c1417bc7-6e14-4e9b-84a6-38444c15e545 reached SUCCESS without Railway 
 Production variables set via Railway CLI: SHOO_AUTH_ENABLED=true, SHOO_APP_ORIGIN=https://kestrel-production-2597.up.railway.app, SHOO_JWKS_URL=https://shoo.dev/.well-known/jwks.json, FRONTEND_URL=https://kestrel-production-2597.up.railway.app, SESSION_COOKIE_SECURE=true, MCP_RESOURCE_URL=https://kestrel-production-2597.up.railway.app/mcp/. Local-code deployment b7afbae6-d812-4cb3-9603-4fd534710408 succeeded after stale GitHub deployment 9405513c crashed on missing z9a0b1c2d3e4. /health=200 database connected; /api/auth/shoo/me reports auth_required=true; private APIs return 401. SHOO_CLAIM_LEGACY_DATA remains unset/false pending operator backup and explicit one-time ownership claim.
 
 Investigated reported redirect loop: useShooAuth default autoHandleCallback redirected from /auth/callback before LoginPage submitted the ID token to /api/auth/shoo/login, so Kestrel never received a server session. Patched LoginPage to own callback completion, retain a validated same-origin return route, then exchange the token with Kestrel before navigation; added regression coverage.
+
+Committed callback repair as 50b5c76 and deployed local code to Railway deployment ececf06d-2979-492e-9fcb-b419888a1d85; deployment reached SUCCESS. Frontend callback regression test and npm build pass. Live health check pending final browser login attempt.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
