@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 23:22'
+updated_date: '2026-09-10 23:29'
 labels: []
 dependencies: []
 references:
@@ -58,14 +58,14 @@ Require verified Shoo Google identity for private Kestrel data and bind every pr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Backend verifies Shoo ID token signature, issuer, audience, expiration, and stable pairwise_sub
-- [ ] #2 Secure server session supports login, logout, expiration, HttpOnly Secure SameSite cookies, and CSRF protection
-- [ ] #3 Profiles and private records resolve through authenticated ownership instead of trusted caller-supplied ownership
-- [ ] #4 Private API routes and application pages reject anonymous access; public routes are limited to login/auth flow, health, and required static assets
-- [ ] #5 Personal analytics remain private
-- [ ] #6 Dedicated browser-extension authentication remains isolated and cannot cross users
-- [ ] #7 Two-account tests prove cross-user reads and writes fail
-- [ ] #8 Existing single-profile data has a safe documented ownership migration path
+- [x] #1 Backend verifies Shoo ID token signature, issuer, audience, expiration, and stable pairwise_sub
+- [x] #2 Secure server session supports login, logout, expiration, HttpOnly Secure SameSite cookies, and CSRF protection
+- [x] #3 Profiles and private records resolve through authenticated ownership instead of trusted caller-supplied ownership
+- [x] #4 Private API routes and application pages reject anonymous access; public routes are limited to login/auth flow, health, and required static assets
+- [x] #5 Personal analytics remain private
+- [x] #6 Dedicated browser-extension authentication remains isolated and cannot cross users
+- [x] #7 Two-account tests prove cross-user reads and writes fail
+- [x] #8 Existing single-profile data has a safe documented ownership migration path
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -92,6 +92,8 @@ Railway deployment ececf06d served stale frontend asset index-CscV4BTt.js despit
 Independent judge found and verified blocking stale-token race; repaired in f1ccd1b by suppressing token submission while callback URL contains code/state, and strengthened test with stale localStorage identity plus exactly-one login POST. Focused test, full frontend test suite (382 passed), build, and lint pass. Deployed local source as 86e558f8-00b4-4624-afe0-dbdcb74302eb; status SUCCESS.
 
 Integrated security audit found critical unauthenticated SPA path traversal; repair required before judge.
+
+Implementer: .venv/bin/pytest tests/test_shoo_auth.py -q (8 passed), extension ownership (1 passed), migration packaging (1 passed), SPA traversal (3 passed), frontend AuthGuard/LoginPage (4 passed). Audit: PASS, 0 blocking; 68 targeted tests passed. Judge: PASS, 0 blocking; 55 targeted tests passed. Combined gates: uv run --locked pytest -q -p no:warnings => 4358 passed, 36 skipped; frontend npm test => 382 passed; npm run build and npm run lint passed. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS from committed main; health 200 database connected; anonymous private APIs and POST /mcp/ return 401. Browser reached Google Email or phone prompt; no authorized session, so separate-profile/provider-save/authenticated-MCP screenshots remain unavailable.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
