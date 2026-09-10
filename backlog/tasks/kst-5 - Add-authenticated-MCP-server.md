@@ -4,7 +4,7 @@ title: Add authenticated MCP server
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:29'
+updated_date: '2026-09-10 23:32'
 labels: []
 dependencies:
   - KST-001
@@ -38,6 +38,8 @@ Let local coding agents manage authenticated Kestrel data through a remote Strea
 Independent MCP security audit passed: token verification, account/profile ownership, scopes, secret redaction, confirmation gates, audit records, transport auth, and SSRF boundary checks verified. Removed caller-supplied search_profile_id from MCP discovery tools.
 
 Implementer: tests/test_mcp_server.py 20 passed, test_shoo_auth.py 8 passed, test_kst001_account_scoping.py 2 passed, test_extension_auth_ownership.py 3 passed, tools/tests/test_kestrel_mcp.py 20 passed. Audit: PASS, 0 blocking; judge: PASS, 0 blocking. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider/MCP-token APIs and POST /mcp/ return 401. Google browser flow reached credential prompt; authenticated token lifecycle and MCP tool proof unavailable. Non-blocking follow-ups: stored URL scheme validation, token mint rate/cap, CSV status validation, wildcard escaping, CSP.
+
+Release boundary: authenticated MCP token create/list/revoke and tool-call browser proof remains blocked at Shoo Google credential prompt; no authenticated lifecycle claim made. Anonymous /mcp/ rejection and code/test gates are verified.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
