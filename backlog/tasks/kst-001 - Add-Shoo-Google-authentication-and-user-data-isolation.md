@@ -1,11 +1,11 @@
 ---
 id: KST-001
 title: Add Shoo Google authentication and user data isolation
-status: In Progress
+status: Done
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 23:32'
+updated_date: '2026-09-10 23:34'
 labels: []
 dependencies: []
 references:
@@ -154,3 +154,9 @@ created: 2026-09-10 23:22
 [judge] PASS — combined review @ 92ac826. No blocking. Verified: token verification (services/auth.py:33-58 ES256/kid/iss/aud/pairwise_sub), session+CSRF+expiry (services/auth.py:60-95), ownership gate+CSRF body scan (dependencies.py:33-52,84-95), 30 routers under _private_dependencies (main.py:292-325), SPA containment (main.py:373-385 + test_kestrel_start.py regression), extension account binding (api/extension.py:80-93, tests/test_extension_auth_ownership.py), linear migration chain w5→x6y7z8a9b0c1→y7z8a9b0c1d2→z8a9b0c1d2e3→z9a0b1c2d3e4. FOLLOW-UP (new): src/career_os/api/shoo_auth.py:155-181,203-211 — POST/DELETE /api/auth/shoo/mcp-tokens skip csrf_valid (router mounted without _private_dependencies and _browser_account checks session only); SameSite=lax mitigates cross-site POST and DELETE is preflight-blocked, so no exploitable hole, but add csrf_valid for parity with logout/authorize_private_request.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented Shoo Google authentication, secure sessions, CSRF, account ownership isolation, extension-token isolation, frontend route guarding, and safe legacy-data migration. Verified with full backend suite (4358 passed, 36 skipped), frontend suite (382 passed), build, lint, focused security gates, deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS, health 200, and anonymous private-route 401 checks. Authenticated browser proof stopped at Google credential prompt because no authorized session was available.
+<!-- SECTION:FINAL_SUMMARY:END -->
