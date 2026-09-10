@@ -211,6 +211,7 @@ async def mcp_canonical_redirect() -> RedirectResponse:
     """Preserve MCP methods while routing the documented URL to mounted app."""
     return RedirectResponse(url="/mcp/", status_code=307)
 
+
 # Rate limiting for OAuth endpoints
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
@@ -353,9 +354,11 @@ async def health_check() -> JSONResponse:
 
 # Check multiple locations for the built frontend:
 # 1. Development: project_root/frontend/dist (when running from repo)
-# 2. pip install: package_dir/_frontend_dist (bundled in wheel)
+# 2. Docker: /app/frontend/dist (built in Dockerfile before pip install)
+# 3. pip install: package_dir/_frontend_dist (bundled in wheel)
 _FRONTEND_DIR_CANDIDATES = [
     Path(__file__).resolve().parents[2] / "frontend" / "dist",  # dev / Docker
+    Path.cwd() / "frontend" / "dist",  # Docker image / repository CWD
     Path(__file__).resolve().parent / "_frontend_dist",  # pip install
 ]
 _FRONTEND_DIR = next((d for d in _FRONTEND_DIR_CANDIDATES if d.is_dir()), None)

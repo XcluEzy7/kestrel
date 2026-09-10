@@ -70,6 +70,12 @@ class TestMainModule:
 class TestFrontendDiscovery:
     """Tests for frontend static file discovery in pip-install mode."""
 
+    def test_frontend_candidates_include_docker_build_output(self) -> None:
+        """Docker must serve its freshly built frontend before packaged assets."""
+        from career_os.main import _FRONTEND_DIR_CANDIDATES
+
+        assert Path.cwd() / "frontend" / "dist" in _FRONTEND_DIR_CANDIDATES
+
     def test_frontend_dist_bundled(self) -> None:
         """The _frontend_dist directory should exist in the package."""
         pkg_dir = Path(__file__).resolve().parent.parent / "src" / "career_os"
