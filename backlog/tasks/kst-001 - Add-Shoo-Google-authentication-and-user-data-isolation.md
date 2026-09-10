@@ -130,4 +130,10 @@ created: 2026-09-10 21:16
 ---
 [judge] BLOCKING frontend/src/pages/LoginPage.tsx:58-64 — Race: on /auth/callback mount with a stale shoo_identity token in localStorage, the hook init effect (@shoojs/react dist/index.js: setIdentity(client.getIdentity())) surfaces the old token in the same commit in which effect 1 starts finishSignIn; effect 2 has no callback-awareness, so it immediately POSTs the STALE token to /api/auth/shoo/login concurrently with the in-flight callback exchange. Interleavings: stale 401 → catch's clearIdentity() can run after refreshIdentity() already read the fresh token, wiping it from localStorage and state so the new token is never submitted; callbackHandled.current (line 45) blocks auto-retry → user sees spurious "Sign-in could not be verified" and must repeat the full Shoo redirect. If the stale token is still valid, a duplicate server session and duplicate navigation are created. Fix: gate effect 2 on callback completion (in-flight flag set in effect 1, cleared after finishSignIn settles) so token submission happens only after the callback exchange, while preserving the no-callback silent re-login path (parseCallback() === null).
 ---
+
+author: @ShooCallbackJudge
+created: 2026-09-10 21:16
+---
+[judge] FOLLOW-UP frontend/src/__tests__/LoginPage.test.tsx:24-32 — The useShooAuth mock diverges from the installed package contract (frontend/node_modules/@shoojs/react/dist/index.js): real hook returns claims/sessionState and initializes identity via client.getIdentity(); real refreshIdentity is async with no args and does NOT throw on failure. The mock hard-codes refreshIdentity to force identity.token, so the test asserts only the happy path and cannot fail on any effect-2 failure/clearIdentity interleave. Rework the mock to mirror the real return shape + init from getIdentity, then add tests for the stale-token race and failure clearing.
+---
 <!-- COMMENTS:END -->
