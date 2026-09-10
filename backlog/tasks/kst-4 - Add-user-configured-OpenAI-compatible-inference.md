@@ -45,4 +45,6 @@ Let each authenticated user configure an OpenAI-compatible base URL and bearer A
 
 <!-- SECTION:NOTES:BEGIN -->
 Validation found no Codex OAuth contract, no OLLAMA_API_KEY resolution, and provider route/component test gaps; all focused tests passed with two dependency deprecation warnings. Refreshed tracked packaged frontend artifact after rebuilding frontend.
+
+Integrated security audit found high-severity unscoped integration_configs credential fallback; repair required before judge.
 <!-- SECTION:NOTES:END -->
