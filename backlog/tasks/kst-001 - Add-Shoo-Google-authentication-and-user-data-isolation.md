@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 19:52'
+updated_date: '2026-09-10 20:37'
 labels: []
 dependencies: []
 references:
@@ -84,6 +84,8 @@ Require verified Shoo Google identity for private Kestrel data and bind every pr
 Implementation started in feat/KST-001-shoo-auth. Old hand-written backlog.md will be removed in favor of Backlog.md CLI records.
 
 Deployment c1417bc7-6e14-4e9b-84a6-38444c15e545 reached SUCCESS without Railway configuration changes. Live /health returned 200 with database connected; anonymous private provider and MCP-token APIs returned 401. Live Settings screenshot captured MCP server tokens form with Read/Write scopes and expiry controls, but token fetch returned 401. Shoo login reached Google Email or phone prompt with no existing browser session, so authenticated separate-profile/provider proof remains unavailable. Docs routes still return 200 because SHOO_AUTH_ENABLED is absent/false in Railway variables; production auth must be enabled before AC4 live proof.
+
+Production variables set via Railway CLI: SHOO_AUTH_ENABLED=true, SHOO_APP_ORIGIN=https://kestrel-production-2597.up.railway.app, SHOO_JWKS_URL=https://shoo.dev/.well-known/jwks.json, FRONTEND_URL=https://kestrel-production-2597.up.railway.app, SESSION_COOKIE_SECURE=true, MCP_RESOURCE_URL=https://kestrel-production-2597.up.railway.app/mcp/. Local-code deployment b7afbae6-d812-4cb3-9603-4fd534710408 succeeded after stale GitHub deployment 9405513c crashed on missing z9a0b1c2d3e4. /health=200 database connected; /api/auth/shoo/me reports auth_required=true; private APIs return 401. SHOO_CLAIM_LEGACY_DATA remains unset/false pending operator backup and explicit one-time ownership claim.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
