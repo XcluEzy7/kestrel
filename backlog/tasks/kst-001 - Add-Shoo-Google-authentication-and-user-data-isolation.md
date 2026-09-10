@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 23:29'
+updated_date: '2026-09-10 23:32'
 labels: []
 dependencies: []
 references:
@@ -94,6 +94,8 @@ Independent judge found and verified blocking stale-token race; repaired in f1cc
 Integrated security audit found critical unauthenticated SPA path traversal; repair required before judge.
 
 Implementer: .venv/bin/pytest tests/test_shoo_auth.py -q (8 passed), extension ownership (1 passed), migration packaging (1 passed), SPA traversal (3 passed), frontend AuthGuard/LoginPage (4 passed). Audit: PASS, 0 blocking; 68 targeted tests passed. Judge: PASS, 0 blocking; 55 targeted tests passed. Combined gates: uv run --locked pytest -q -p no:warnings => 4358 passed, 36 skipped; frontend npm test => 382 passed; npm run build and npm run lint passed. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS from committed main; health 200 database connected; anonymous private APIs and POST /mcp/ return 401. Browser reached Google Email or phone prompt; no authorized session, so separate-profile/provider-save/authenticated-MCP screenshots remain unavailable.
+
+Release boundary: separate managed browser reached Shoo Google credential prompt, but no authorized Google session was available. No authenticated profile creation, provider save/test, or MCP token lifecycle evidence claimed.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
