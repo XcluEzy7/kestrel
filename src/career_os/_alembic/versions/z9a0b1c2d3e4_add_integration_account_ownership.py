@@ -1,7 +1,7 @@
 """Scope integration configurations to accounts.
 
 Revision ID: z9a0b1c2d3e4
-Revises: y7z8a9b0c1d2
+Revises: z8a9b0c1d2e3
 
 Existing integration rows stay unowned (account_id NULL). Operators or an
 explicit migration may assign them; this migration never guesses ownership.
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "z9a0b1c2d3e4"
-down_revision: str | None = "y7z8a9b0c1d2"
+down_revision: str | None = "z8a9b0c1d2e3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
