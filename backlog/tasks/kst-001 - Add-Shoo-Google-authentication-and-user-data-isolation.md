@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 21:21'
+updated_date: '2026-09-10 22:27'
 labels: []
 dependencies: []
 references:
@@ -71,11 +71,7 @@ Require verified Shoo Google identity for private Kestrel data and bind every pr
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-1. Map every profile-scoped model and route plus current auth middleware.
-2. Add Shoo token verification, account ownership, session and CSRF controls with migrations.
-3. Gate backend and frontend routes, preserving dedicated extension auth.
-4. Add route-matrix, token, session, migration, frontend, and two-user isolation tests.
-5. Run full checks, independent Terra review, repair until clean, then integrate directly to main.
+1. Bound SPA catch-all file serving to frontend directory using normalized containment. 2. Add regression coverage for encoded parent traversal. 3. Run focused startup/security tests and record evidence.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
