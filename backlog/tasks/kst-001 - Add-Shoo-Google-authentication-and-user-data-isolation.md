@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 21:16'
+updated_date: '2026-09-10 21:21'
 labels: []
 dependencies: []
 references:
@@ -92,6 +92,8 @@ Investigated reported redirect loop: useShooAuth default autoHandleCallback redi
 Committed callback repair as 50b5c76 and deployed local code to Railway deployment ececf06d-2979-492e-9fcb-b419888a1d85; deployment reached SUCCESS. Frontend callback regression test and npm build pass. Live health check pending final browser login attempt.
 
 Railway deployment ececf06d served stale frontend asset index-CscV4BTt.js despite local repair bundle index-fEq-KDzG.js; .dockerignore excludes frontend/dist, proving build context used stale source. Re-deployed current local source directly as 839dedb8-e362-4362-b9d3-91c1a47f1e83; status SUCCESS. Live bundle verification follows.
+
+Independent judge found and verified blocking stale-token race; repaired in f1ccd1b by suppressing token submission while callback URL contains code/state, and strengthened test with stale localStorage identity plus exactly-one login POST. Focused test, full frontend test suite (382 passed), build, and lint pass. Deployed local source as 86e558f8-00b4-4624-afe0-dbdcb74302eb; status SUCCESS.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
