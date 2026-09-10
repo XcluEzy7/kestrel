@@ -136,4 +136,10 @@ created: 2026-09-10 21:16
 ---
 [judge] FOLLOW-UP frontend/src/__tests__/LoginPage.test.tsx:24-32 — The useShooAuth mock diverges from the installed package contract (frontend/node_modules/@shoojs/react/dist/index.js): real hook returns claims/sessionState and initializes identity via client.getIdentity(); real refreshIdentity is async with no args and does NOT throw on failure. The mock hard-codes refreshIdentity to force identity.token, so the test asserts only the happy path and cannot fail on any effect-2 failure/clearIdentity interleave. Rework the mock to mirror the real return shape + init from getIdentity, then add tests for the stale-token race and failure clearing.
 ---
+
+author: @ShooCallbackJudge
+created: 2026-09-10 21:16
+---
+[judge] FOLLOW-UP frontend/src/pages/LoginPage.tsx:47,62 — useEffect dependency arrays use whole function refs (refreshIdentity/clearIdentity) while the code path only depends on the option objects captured at mount; acceptable today but brittle. Also line 47 sessionStorage.getItem is read without normalization: safeReturnTo re-validates, so a poisoned stored value falls back safely — no security issue, noting for clarity only.
+---
 <!-- COMMENTS:END -->
