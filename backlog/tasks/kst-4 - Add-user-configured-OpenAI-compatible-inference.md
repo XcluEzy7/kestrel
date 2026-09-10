@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 22:01'
+updated_date: '2026-09-10 22:27'
 labels: []
 dependencies:
   - KST-001
@@ -34,6 +34,12 @@ Let each authenticated user configure an OpenAI-compatible base URL and bearer A
 - [ ] #8 Codex subscription OAuth ships only when research proves a supported OpenAI contract; no borrowed CLI credentials, token scraping, or undocumented credential extraction
 - [ ] #9 Provider contract, URL validation, model discovery, isolation, frontend, and migration tests pass
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Scope legacy integration credential fallback by authenticated account. 2. Add multi-account regression coverage proving credentials never cross accounts. 3. Run focused provider tests and record evidence.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
