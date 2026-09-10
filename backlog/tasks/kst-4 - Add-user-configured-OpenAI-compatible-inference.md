@@ -4,6 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
+updated_date: '2026-09-10 22:01'
 labels: []
 dependencies:
   - KST-001
@@ -33,3 +34,9 @@ Let each authenticated user configure an OpenAI-compatible base URL and bearer A
 - [ ] #8 Codex subscription OAuth ships only when research proves a supported OpenAI contract; no borrowed CLI credentials, token scraping, or undocumented credential extraction
 - [ ] #9 Provider contract, URL validation, model discovery, isolation, frontend, and migration tests pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Validation found no Codex OAuth contract, no OLLAMA_API_KEY resolution, and provider route/component test gaps; all focused tests passed with two dependency deprecation warnings. Refreshed tracked packaged frontend artifact after rebuilding frontend.
+<!-- SECTION:NOTES:END -->
