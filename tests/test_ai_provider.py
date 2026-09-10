@@ -10,6 +10,8 @@ Covers:
 
 import json
 import os
+import sqlite3
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +19,11 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from career_os.ai.base import AIProvider
-from career_os.ai.factory import UnsupportedProviderError, get_ai_provider
+from career_os.ai.factory import (
+    UnsupportedProviderError,
+    _read_credential_from_db,
+    get_ai_provider,
+)
 from career_os.ai.mock_provider import MockProvider
 from career_os.ai.openrouter_provider import OpenRouterProvider
 from career_os.schemas.ai import (
@@ -354,6 +360,31 @@ class TestProviderFactory:
             pytest.raises(ValueError, match="OPENROUTER_API_KEY"),
         ):
             get_ai_provider("openrouter")
+
+    def test_account_provider_fallback_reads_only_calling_account(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        db_path = tmp_path / "accounts.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE integration_configs ("
+            "name TEXT NOT NULL, account_id INTEGER, credentials TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO integration_configs(name, account_id, credentials) VALUES (?, ?, ?)",
+            [
+                ("ai_providers", 1, json.dumps({"openrouter_api_key": "account-one-key"})),
+                ("ai_providers", 2, json.dumps({"openrouter_api_key": "account-two-key"})),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr("career_os.config.settings.database_url", f"sqlite:///{db_path}")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        assert _read_credential_from_db("openrouter_api_key", 1) == "account-one-key"
+        assert _read_credential_from_db("openrouter_api_key", 2) == "account-two-key"
+        assert _read_credential_from_db("openrouter_api_key", 3) == ""
 
 
 # ---------------------------------------------------------------------------

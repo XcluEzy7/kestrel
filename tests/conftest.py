@@ -84,7 +84,7 @@ def hermetic_db_credentials(monkeypatch):
     """
     monkeypatch.setattr(
         "career_os.ai.factory._read_credential_from_db",
-        lambda credential_key: "",
+        lambda credential_key, account_id=None: "",
     )
 
 

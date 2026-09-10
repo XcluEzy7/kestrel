@@ -374,7 +374,12 @@ if _FRONTEND_DIR is not None and _FRONTEND_DIR.is_dir():
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str) -> FileResponse:
         """Catch-all: serve the SPA index.html for client-side routing."""
-        file_path = _FRONTEND_DIR / full_path
+        frontend_root = _FRONTEND_DIR.resolve()
+        file_path = (frontend_root / full_path).resolve()
+        try:
+            file_path.relative_to(frontend_root)
+        except ValueError:
+            file_path = frontend_root / "index.html"
         if file_path.is_file():
             return FileResponse(file_path)
-        return FileResponse(_FRONTEND_DIR / "index.html")
+        return FileResponse(frontend_root / "index.html")

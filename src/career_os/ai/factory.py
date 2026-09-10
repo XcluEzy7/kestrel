@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _build_ollama_provider() -> AIProvider:
+def _build_ollama_provider(account_id: int | None = None) -> AIProvider:
     """Build operator-selected local Ollama without hosted SSRF restrictions."""
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     return OllamaProvider(base_url=base_url, model=os.getenv("OLLAMA_MODEL", "llama3.3"))
@@ -95,7 +95,7 @@ def _account_connection(db: "Session", account: "Account") -> "ProviderConnectio
 # ---------------------------------------------------------------------------
 
 
-def _read_credential_from_db(credential_key: str) -> str:
+def _read_credential_from_db(credential_key: str, account_id: int | None = None) -> str:
     """Read a credential value from the integration_configs table.
 
     Uses a direct SQLite connection to avoid circular imports with the
@@ -110,10 +110,16 @@ def _read_credential_from_db(credential_key: str) -> str:
     db_path = db_url.replace("sqlite:///", "")
     try:
         conn = sqlite3.connect(db_path)
-        row = conn.execute(
-            "SELECT credentials FROM integration_configs WHERE name = ?",
-            ("ai_providers",),
-        ).fetchone()
+        if account_id is None:
+            row = conn.execute(
+                "SELECT credentials FROM integration_configs WHERE name = ? AND account_id IS NULL",
+                ("ai_providers",),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT credentials FROM integration_configs WHERE name = ? AND account_id = ?",
+                ("ai_providers", account_id),
+            ).fetchone()
         conn.close()
     except Exception:
         return ""
@@ -127,12 +133,12 @@ def _read_credential_from_db(credential_key: str) -> str:
         return ""
 
 
-def _resolve_api_key(env_var: str, credential_key: str) -> str:
+def _resolve_api_key(env_var: str, credential_key: str, account_id: int | None = None) -> str:
     """Resolve an API key: env var first, then DB-stored credential."""
     val = os.getenv(env_var, "")
     if val:
         return val
-    return _read_credential_from_db(credential_key)
+    return _read_credential_from_db(credential_key, account_id)
 
 
 # ---------------------------------------------------------------------------
@@ -142,61 +148,69 @@ def _resolve_api_key(env_var: str, credential_key: str) -> str:
 # think "mock" means broken.
 # ---------------------------------------------------------------------------
 
-_PROVIDER_REGISTRY: dict[str, Callable[[], AIProvider]] = {
-    "mock": lambda: MockProvider(),
-    "demo": lambda: MockProvider(),
-    "openrouter": lambda: OpenRouterProvider(
-        api_key=_resolve_api_key("OPENROUTER_API_KEY", "openrouter_api_key"),
+_PROVIDER_REGISTRY: dict[str, Callable[[int | None], AIProvider]] = {
+    "mock": lambda account_id=None: MockProvider(),
+    "demo": lambda account_id=None: MockProvider(),
+    "openrouter": lambda account_id=None: OpenRouterProvider(
+        api_key=_resolve_api_key("OPENROUTER_API_KEY", "openrouter_api_key", account_id),
         model=os.getenv("OPENROUTER_MODEL", OPENROUTER_DEFAULT_MODEL),
     ),
-    "anthropic": lambda: AnthropicProvider(
-        api_key=_resolve_api_key("ANTHROPIC_API_KEY", "anthropic_api_key"),
+    "anthropic": lambda account_id=None: AnthropicProvider(
+        api_key=_resolve_api_key("ANTHROPIC_API_KEY", "anthropic_api_key", account_id),
         model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5"),
     ),
     "ollama": _build_ollama_provider,
-    "openai": lambda: OpenAIProvider(
-        api_key=_resolve_api_key("OPENAI_API_KEY", "openai_api_key"),
+    "openai": lambda account_id=None: OpenAIProvider(
+        api_key=_resolve_api_key("OPENAI_API_KEY", "openai_api_key", account_id),
         # `or DEFAULT` (not just getenv's default): a set-but-empty OPENAI_MODEL
         # would otherwise send model="" and 400 every request.
         model=os.getenv("OPENAI_MODEL", "").strip() or OPENAI_DEFAULT_MODEL,
     ),
-    "together": lambda: TogetherProvider(
-        api_key=_resolve_api_key("TOGETHER_API_KEY", "together_api_key"),
+    "together": lambda account_id=None: TogetherProvider(
+        api_key=_resolve_api_key("TOGETHER_API_KEY", "together_api_key", account_id),
         model=os.getenv("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
     ),
-    "groq": lambda: GroqProvider(
-        api_key=_resolve_api_key("GROQ_API_KEY", "groq_api_key"),
+    "groq": lambda account_id=None: GroqProvider(
+        api_key=_resolve_api_key("GROQ_API_KEY", "groq_api_key", account_id),
         model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     ),
-    "xai": lambda: XAIProvider(
-        api_key=_resolve_api_key("XAI_API_KEY", "xai_api_key"),
+    "xai": lambda account_id=None: XAIProvider(
+        api_key=_resolve_api_key("XAI_API_KEY", "xai_api_key", account_id),
         model=os.getenv("XAI_MODEL", "grok-3-mini"),
     ),
-    "gemini": lambda: GeminiProvider(
-        api_key=_resolve_api_key("GEMINI_API_KEY", "gemini_api_key"),
+    "gemini": lambda account_id=None: GeminiProvider(
+        api_key=_resolve_api_key("GEMINI_API_KEY", "gemini_api_key", account_id),
         model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
     ),
-    "mistral": lambda: MistralProvider(
-        api_key=_resolve_api_key("MISTRAL_API_KEY", "mistral_api_key"),
+    "mistral": lambda account_id=None: MistralProvider(
+        api_key=_resolve_api_key("MISTRAL_API_KEY", "mistral_api_key", account_id),
         # Mistral Small (not Large) is the default: a 2026-07 cost/quality
         # benchmark found Small the best-value scorer for bulk job filtering —
         # closest to premium Claude Opus at a fraction of the cost. Set
         # MISTRAL_MODEL=mistral-large-latest to opt into the flagship for deep work.
         model=os.getenv("MISTRAL_MODEL", "mistral-small-latest"),
     ),
-    "huggingface": lambda: HuggingFaceProvider(
-        api_key=_resolve_api_key("HF_API_KEY", "hf_api_key")
+    "huggingface": lambda account_id=None: HuggingFaceProvider(
+        api_key=_resolve_api_key("HF_API_KEY", "hf_api_key", account_id)
         or os.getenv("HUGGINGFACE_API_KEY", ""),
         model=os.getenv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
     ),
-    "hf": lambda: HuggingFaceProvider(
-        api_key=_resolve_api_key("HF_API_KEY", "hf_api_key")
+    "hf": lambda account_id=None: HuggingFaceProvider(
+        api_key=_resolve_api_key("HF_API_KEY", "hf_api_key", account_id)
         or os.getenv("HUGGINGFACE_API_KEY", ""),
         model=os.getenv("HF_MODEL", "meta-llama/Llama-3.3-70B-Instruct"),
     ),
 }
 
 _SUPPORTED_PROVIDERS = set(_PROVIDER_REGISTRY.keys())
+
+
+def _call_factory(
+    factory_fn: Callable[[int | None], AIProvider], account_id: int | None
+) -> AIProvider:
+    """Call registry entries without breaking existing zero-argument entries."""
+    return factory_fn(account_id) if account_id is not None else factory_fn()
+
 
 # ---------------------------------------------------------------------------
 # Premium-provider fallback guard (COE 2026-07-19, G-1371)
@@ -290,7 +304,7 @@ class UnsupportedProviderError(Exception):
         )
 
 
-def _build_fallback_chain() -> list[AIProvider] | None:
+def _build_fallback_chain(account_id: int | None = None) -> list[AIProvider] | None:
     """Build a fallback chain from AI_PROVIDER_FALLBACK env var.
 
     Returns a list of provider instances for each valid provider name in the
@@ -312,7 +326,7 @@ def _build_fallback_chain() -> list[AIProvider] | None:
     for name in names:
         factory_fn = _PROVIDER_REGISTRY.get(name)
         if factory_fn is not None:
-            providers.append(factory_fn())
+            providers.append(_call_factory(factory_fn, account_id))
         else:
             logger.warning("Fallback chain: skipping unknown provider '%s'", name)
 
@@ -365,7 +379,8 @@ def get_ai_provider(
 
     # When no explicit name given, check for a fallback chain first
     if provider_name is None:
-        chain = _build_fallback_chain()
+        account_id = account.id if account is not None else None
+        chain = _build_fallback_chain(account_id)
         if chain is not None:
             from career_os.ai.fallback import FallbackProvider
 
@@ -376,4 +391,4 @@ def get_ai_provider(
     factory_fn = _PROVIDER_REGISTRY.get(name)
     if factory_fn is None:
         raise UnsupportedProviderError(name)
-    return factory_fn()
+    return _call_factory(factory_fn, account.id if account is not None else None)

@@ -4,9 +4,11 @@ import importlib
 import re
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
 from career_os.cli.main import app
+from career_os.main import app as web_app
 
 runner = CliRunner()
 
@@ -83,6 +85,12 @@ class TestFrontendDiscovery:
         assert frontend_dir.exists(), f"Expected {frontend_dir} to exist"
         assert (frontend_dir / "index.html").exists()
         assert (frontend_dir / "assets").is_dir()
+
+    def test_spa_catch_all_does_not_serve_files_outside_frontend(self) -> None:
+        response = TestClient(web_app).get("/%2e%2e/data/career_os.db")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert "SQLite format 3" not in response.content.decode("utf-8", errors="ignore")
 
     def test_alembic_bundled(self) -> None:
         """The _alembic directory should exist in the package."""
