@@ -40,9 +40,10 @@ export function LoginPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const callbackPending = authClient?.parseCallback() !== null;
 
   useEffect(() => {
-    if (loading || !authClient || callbackHandled.current || !authClient.parseCallback()) {
+    if (loading || !authClient || callbackHandled.current || !callbackPending) {
       return;
     }
     callbackHandled.current = true;
@@ -53,10 +54,10 @@ export function LoginPage() {
         clearIdentity();
         setServerError("Sign-in could not be completed. Try again.");
       });
-  }, [authClient, clearIdentity, loading, refreshIdentity]);
+  }, [authClient, callbackPending, clearIdentity, loading, refreshIdentity]);
 
   useEffect(() => {
-    if (!identity.token || submittedToken.current === identity.token) return;
+    if (loading || callbackPending || !identity.token || submittedToken.current === identity.token) return;
     submittedToken.current = identity.token;
     const returnTo = safeReturnTo(
       sessionStorage.getItem(RETURN_TO_STORAGE_KEY),
@@ -72,7 +73,7 @@ export function LoginPage() {
         clearIdentity();
         setServerError("Sign-in could not be verified. Try again.");
       });
-  }, [clearIdentity, from, identity.token, navigate, queryClient]);
+  }, [callbackPending, clearIdentity, from, identity.token, loading, navigate, queryClient]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">

@@ -15,19 +15,30 @@ const { mockAuthClient, mockLoginWithShoo } = vi.hoisted(() => ({
   mockLoginWithShoo: vi.fn(),
 }));
 
-vi.mock("@shoojs/react", async () => {
+vi.mock("@shoojs/react", () => {
   return {
     useShooAuth: () => {
-      const [identity, setIdentity] = useState<{ userId: string | null; token?: string }>({
-        userId: null,
+      const [identity, setIdentity] = useState(() => {
+        const raw = localStorage.getItem("shoo_identity");
+        const stored = raw ? JSON.parse(raw) as { userId?: string; token?: string } : {};
+        return { userId: stored.userId ?? null, token: stored.token };
       });
       return {
         identity,
         loading: false,
         error: null,
         signIn: vi.fn(),
-        clearIdentity: vi.fn(),
-        refreshIdentity: () => setIdentity({ userId: "user-1", token: "id-token" }),
+        clearIdentity: () => {
+          localStorage.removeItem("shoo_identity");
+          setIdentity({ userId: null });
+        },
+        refreshIdentity: () => {
+          const raw = localStorage.getItem("shoo_identity");
+          const stored = raw ? JSON.parse(raw) as { userId?: string; token?: string } : {};
+          setIdentity({ userId: stored.userId ?? null, token: stored.token });
+        },
+        claims: null,
+        sessionState: "unknown",
         authClient: mockAuthClient,
       };
     },
@@ -39,10 +50,18 @@ vi.mock("@/api/auth", () => ({ loginWithShoo: mockLoginWithShoo }));
 describe("LoginPage", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/auth/callback?code=code&state=state");
+    localStorage.clear();
+    localStorage.setItem("shoo_identity", JSON.stringify({ userId: "old-user", token: "stale-token" }));
     sessionStorage.clear();
     sessionStorage.setItem("kestrel_auth_return_to", "/settings");
-    mockAuthClient.parseCallback.mockReturnValue({ code: "code", state: "state" });
-    mockAuthClient.finishSignIn.mockResolvedValue({ pairwise_sub: "user-1", id_token: "id-token" });
+    mockAuthClient.parseCallback.mockImplementation(() => (
+      window.location.search ? { code: "code", state: "state" } : null
+    ));
+    mockAuthClient.finishSignIn.mockImplementation(async () => {
+      localStorage.setItem("shoo_identity", JSON.stringify({ userId: "user-1", token: "id-token" }));
+      window.history.replaceState({}, "", "/auth/callback");
+      return { pairwise_sub: "user-1", id_token: "id-token" };
+    });
     mockLoginWithShoo.mockResolvedValue({ authenticated: true, profile_id: 1 });
   });
 
@@ -60,6 +79,7 @@ describe("LoginPage", () => {
       consumeReturnTo: false,
     }));
     await waitFor(() => expect(mockLoginWithShoo).toHaveBeenCalledWith("id-token"));
+    expect(mockLoginWithShoo).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("Settings")).toBeInTheDocument();
     expect(sessionStorage.getItem("kestrel_auth_return_to")).toBeNull();
   });
