@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from career_os.ai.factory import UnsupportedProviderError, get_ai_provider
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.schemas.ai import AICompleteRequest, AIResponse
 from career_os.schemas.ai_health import AIHealthResponse, ProviderHealthStatus
 from career_os.services.ai_health import check_all_providers, check_single_provider
@@ -71,20 +73,24 @@ async def get_current_provider() -> dict[str, str]:
 
 
 @router.get("/health")
-async def ai_health(db: Annotated[Session, Depends(get_db)]) -> AIHealthResponse:
+async def ai_health(
+    db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
+) -> AIHealthResponse:
     """Check connectivity and health of all configured AI providers.
 
     Reads provider configuration from stored integration config.
     Only reports runtime-supported providers (mock, openrouter).
     Each provider is checked independently - one failure does not affect others.
     """
-    return await check_all_providers(db)
+    return await check_all_providers(db, account)
 
 
 @router.get("/health/check")
 async def ai_health_check_single(
     db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
     provider: str = "mock",
 ) -> ProviderHealthStatus:
     """Check health of a single AI provider by name."""
-    return await check_single_provider(provider, db)
+    return await check_single_provider(provider, db, account)

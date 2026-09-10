@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from career_os.api.constants import DESC_FILTER_BY_CATEGORY, DESC_PROFILE_ID
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.schemas.pushover import (
     NotificationLogListResponse,
     NotificationLogResponse,
@@ -171,6 +173,7 @@ async def send_notification(
 @router.post("/test-connection")
 async def test_connection(
     db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
 ) -> dict:
     """Test Pushover connection by validating credentials."""
-    return test_pushover_connection(db)
+    return test_pushover_connection(db, account=account)

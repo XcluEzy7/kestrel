@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from career_os.api.constants import PROFILE_NOT_FOUND, RESP_404
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.models.models import Profile
 from career_os.schemas.profiles import (
     ProfileCreate,
@@ -50,9 +52,15 @@ def _count_profile_children(db: Session, profile_id: int) -> dict[str, int]:
 
 
 @router.get("")
-async def list_profiles(db: Annotated[Session, Depends(get_db)]) -> ProfileListResponse:
-    """List all profiles."""
-    profiles = db.query(Profile).all()
+async def list_profiles(
+    account: Annotated[Account | None, Depends(current_account)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProfileListResponse:
+    """List profiles owned by current account."""
+    query = db.query(Profile)
+    if account is not None:
+        query = query.filter(Profile.account_id == account.id)
+    profiles = query.all()
     return ProfileListResponse(
         profiles=[ProfileResponse.model_validate(p) for p in profiles],
         count=len(profiles),
@@ -60,9 +68,16 @@ async def list_profiles(db: Annotated[Session, Depends(get_db)]) -> ProfileListR
 
 
 @router.get("/{profile_id}", responses=RESP_404)
-async def get_profile(profile_id: int, db: Annotated[Session, Depends(get_db)]) -> ProfileResponse:
+async def get_profile(
+    profile_id: int,
+    account: Annotated[Account | None, Depends(current_account)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ProfileResponse:
     """Get a specific profile by ID."""
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    filters = [Profile.id == profile_id]
+    if account is not None:
+        filters.append(Profile.account_id == account.id)
+    profile = db.query(Profile).filter(*filters).first()
     if profile is None:
         raise HTTPException(status_code=404, detail=PROFILE_NOT_FOUND)
     return ProfileResponse.model_validate(profile)
@@ -71,6 +86,7 @@ async def get_profile(profile_id: int, db: Annotated[Session, Depends(get_db)]) 
 @router.post("", status_code=201)
 async def create_profile(
     payload: ProfileCreate,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProfileResponse:
     """Create a new profile.
@@ -78,6 +94,7 @@ async def create_profile(
     Requires at least a name. Email, location, and job_family are optional.
     """
     profile = Profile(
+        account_id=account.id if account else None,
         name=payload.name,
         email=payload.email,
         location=payload.location,
@@ -94,13 +111,17 @@ async def create_profile(
 async def update_profile(
     profile_id: int,
     payload: ProfileUpdate,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ProfileResponse:
     """Update a profile's fields (partial update).
 
     Only supplied fields are updated. Returns 404 if profile doesn't exist.
     """
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    filters = [Profile.id == profile_id]
+    if account is not None:
+        filters.append(Profile.account_id == account.id)
+    profile = db.query(Profile).filter(*filters).first()
     if profile is None:
         raise HTTPException(status_code=404, detail=PROFILE_NOT_FOUND)
 
@@ -141,6 +162,7 @@ async def update_profile(
 )
 async def delete_profile(
     profile_id: int,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
     force: bool = False,
 ) -> None:
@@ -156,7 +178,10 @@ async def delete_profile(
     wiped a downstream user's full dataset on 2026-05-11 with one stray API
     call; the same DELETE on every Kestrel install would have done the same.
     """
-    profile = db.query(Profile).filter(Profile.id == profile_id).first()
+    filters = [Profile.id == profile_id]
+    if account is not None:
+        filters.append(Profile.account_id == account.id)
+    profile = db.query(Profile).filter(*filters).first()
     if profile is None:
         raise HTTPException(status_code=404, detail=PROFILE_NOT_FOUND)
 

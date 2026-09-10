@@ -11,9 +11,10 @@ import type {
   ContactInteraction,
   ContactApplicationLink,
 } from "./types";
+import { DEFAULT_PROFILE_ID } from "./applications";
 
 const API_BASE = "/api/contacts";
-export const DEFAULT_PROFILE_ID = 1;
+
 
 export async function fetchContacts(params?: {
   company?: string;

@@ -14,6 +14,11 @@ _PUBLIC_PATHS = frozenset(
         "/redoc",
         "/openapi.json",
         "/api/auth/openrouter/callback",  # browser redirect — PKCE state protects it
+        "/api/auth/shoo/login",
+        "/api/auth/shoo/logout",
+        "/api/auth/shoo/me",
+        "/login",
+        "/auth/callback",
     }
 )
 
@@ -23,7 +28,13 @@ _PUBLIC_PATHS = frozenset(
 # them — otherwise a user with AUTH_ENABLED=true could not pair without also
 # knowing AUTH_API_KEY. This bypass ONLY skips the global key: /capture and /status
 # remain gated by the per-route extension token, and /pair is code-gated (T-00-02).
-_PUBLIC_PREFIXES = ("/api/extension/",)
+_PUBLIC_PREFIXES = (
+    "/api/extension/",
+    "/assets/",
+    # Hosted MCP authenticates opaque, account-scoped tokens in its own
+    # verifier. The global AUTH_API_KEY must not shadow that token space.
+    "/mcp/",
+)
 
 
 class APIKeyAuthMiddleware(BaseHTTPMiddleware):
@@ -44,6 +55,9 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
 
         # Public paths always pass
         if request.url.path in _PUBLIC_PATHS:
+            return await call_next(request)
+
+        if request.url.path == "/mcp":
             return await call_next(request)
 
         # Extension routes use a dedicated token enforced per-route — the global

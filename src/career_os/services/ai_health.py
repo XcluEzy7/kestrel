@@ -17,6 +17,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from career_os.ai.factory import _SUPPORTED_PROVIDERS
+from career_os.models.auth import Account
 from career_os.models.integrations import IntegrationConfig
 from career_os.schemas.ai_health import (
     AIHealthResponse,
@@ -268,7 +269,9 @@ async def _check_ollama() -> ProviderHealthStatus:
 # ---------------------------------------------------------------------------
 
 
-def _get_stored_ai_config(db: Session | None) -> dict[str, str]:
+def _get_stored_ai_config(
+    db: Session | None, account: Account | None = None
+) -> dict[str, str]:
     """Read AI provider credentials from stored integration config.
 
     Falls back to environment variables if no stored config exists.
@@ -276,7 +279,12 @@ def _get_stored_ai_config(db: Session | None) -> dict[str, str]:
     """
     creds: dict[str, str] = {}
     if db is not None:
-        row = db.query(IntegrationConfig).filter(IntegrationConfig.name == "ai_providers").first()
+        row = (
+            db.query(IntegrationConfig)
+            .filter(IntegrationConfig.name == "ai_providers")
+            .filter(IntegrationConfig.account_id == (account.id if account is not None else None))
+            .first()
+        )
         if row and row.credentials:
             with contextlib.suppress(json.JSONDecodeError, TypeError):
                 creds = json.loads(row.credentials)

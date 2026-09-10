@@ -27,9 +27,13 @@ extension_app = typer.Typer(
 
 
 @extension_app.command("pair")
-def pair() -> None:
-    """Mint and print a fresh single-use pairing code for the browser extension."""
-    code = mint_pairing_code()
+def pair(
+    account_id: int | None = typer.Option(None, help="Shoo account ID owning this token"),
+) -> None:
+    """Mint and print account-bound pairing code for browser extension."""
+    if settings.shoo_auth_enabled and account_id is None:
+        raise typer.BadParameter("--account-id is required when SHOO_AUTH_ENABLED=true")
+    code = mint_pairing_code(account_id)
     ttl_minutes = max(1, settings.extension_pairing_ttl_seconds // 60)
 
     console.print(

@@ -14,8 +14,10 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
+from career_os.models.auth import Account
 from career_os.models.integrations import IntegrationConfig
 from career_os.models.models import Application, FollowUp
+from career_os.models.models import Profile
 
 if TYPE_CHECKING:
     from career_os.models.calendar import CalendarEvent
@@ -46,12 +48,24 @@ class PushoverNotConfiguredError(Exception):
     """Raised when Pushover integration is not configured or disabled."""
 
 
-def _get_pushover_client(db: Session) -> PushoverClient:
+def _get_pushover_client(
+   db: Session, *, profile_id: int | None = None, account: Account | None = None
+) -> PushoverClient:
     """Get a PushoverClient from the integration config.
 
     Raises PushoverNotConfiguredError if not configured or disabled.
     """
-    row = db.query(IntegrationConfig).filter(IntegrationConfig.name == "pushover").first()
+    account_id = account.id if account is not None else None
+    if account is None and profile_id is not None:
+        account_id = db.query(Profile.account_id).filter(Profile.id == profile_id).scalar()
+    row = (
+        db.query(IntegrationConfig)
+        .filter(
+            IntegrationConfig.name == "pushover",
+            IntegrationConfig.account_id == account_id,
+        )
+        .first()
+    )
     if row is None or not row.enabled:
         raise PushoverNotConfiguredError("Pushover integration is not enabled")
 
@@ -232,7 +246,12 @@ def _send_and_log(
             error_message=f"Auth error: {exc}",
         )
         # Update integration status to error
-        _update_integration_status(db, status="error", message=f"Authentication failed: {exc}")
+        _update_integration_status(
+            db,
+            status="error",
+            message=f"Authentication failed: {exc}",
+            profile_id=profile_id,
+        )
         return {"status": "failed", "error": str(exc), "title": title}
     except PushoverAPIError as exc:
         logger.error("Pushover API error: %s", exc)
@@ -249,9 +268,19 @@ def _send_and_log(
         return {"status": "failed", "error": str(exc), "title": title}
 
 
-def _update_integration_status(db: Session, *, status: str, message: str) -> None:
+def _update_integration_status(
+    db: Session, *, status: str, message: str, account: Account | None = None,
+    profile_id: int | None = None,
+) -> None:
     """Update the pushover integration config status."""
-    row = db.query(IntegrationConfig).filter(IntegrationConfig.name == "pushover").first()
+    account_id = account.id if account is not None else None
+    if account is None and profile_id is not None:
+        account_id = db.query(Profile.account_id).filter(Profile.id == profile_id).scalar()
+    row = (
+        db.query(IntegrationConfig)
+        .filter(IntegrationConfig.name == "pushover", IntegrationConfig.account_id == account_id)
+        .first()
+    )
     if row:
         row.status = status
         row.status_message = message
@@ -355,7 +384,7 @@ def _validate_followup_config(
         return pref, True, None, None
 
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id)
     except PushoverNotConfiguredError as exc:
         return (
             pref,
@@ -617,7 +646,7 @@ def trigger_ghost_alerts(db: Session, profile_id: int) -> dict:
     pushover_configured = True
     if not quiet:
         try:
-            client = _get_pushover_client(db)
+            client = _get_pushover_client(db, profile_id=profile_id)
         except PushoverNotConfiguredError:
             pushover_configured = False
 
@@ -706,7 +735,7 @@ def trigger_discovery_alert(
         )
     else:
         try:
-            client = _get_pushover_client(db)
+            client = _get_pushover_client(db, profile_id=profile_id)
         except PushoverNotConfiguredError as exc:
             result["failed"] = 1
             result["details"].append({"reason": str(exc)})
@@ -875,7 +904,7 @@ def send_test_notification(
     VAL-PUSH-005: Auth failure logged and surfaced in UI, no crash.
     """
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id)
     except PushoverNotConfiguredError as exc:
         _log_notification(
             db,
@@ -917,7 +946,7 @@ def send_credits_exhausted_alert(
     Gracefully no-ops when Pushover is not configured.
     """
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id)
     except PushoverNotConfiguredError:
         return {"status": "skipped", "reason": "pushover not configured"}
 
@@ -960,7 +989,7 @@ def send_drift_alert(
     is not configured.
     """
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id)
     except PushoverNotConfiguredError:
         return {"status": "skipped", "reason": "pushover not configured"}
 
@@ -989,27 +1018,42 @@ def send_drift_alert(
 # ---------------------------------------------------------------------------
 
 
-def test_pushover_connection(db: Session) -> dict:
-    """Test Pushover connection by validating credentials.
-
-    Updates integration status based on result.
-    """
+def test_pushover_connection(
+    db: Session, *, profile_id: int | None = None, account: Account | None = None
+) -> dict:
+    """Test Pushover connection by validating account-owned credentials."""
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id, account=account)
     except PushoverNotConfiguredError as exc:
         return {"success": False, "message": str(exc)}
 
     try:
         client.validate_credentials()
         _update_integration_status(
-            db, status="connected", message="Credentials validated successfully"
+            db,
+            status="connected",
+            message="Credentials validated successfully",
+            account=account,
+            profile_id=profile_id,
         )
         return {"success": True, "message": "Pushover connection successful"}
     except PushoverAuthError as exc:
-        _update_integration_status(db, status="error", message=f"Authentication failed: {exc}")
+        _update_integration_status(
+            db,
+            status="error",
+            message=f"Authentication failed: {exc}",
+            account=account,
+            profile_id=profile_id,
+        )
         return {"success": False, "message": f"Auth error: {exc}"}
     except PushoverAPIError as exc:
-        _update_integration_status(db, status="error", message=f"API error: {exc}")
+        _update_integration_status(
+            db,
+            status="error",
+            message=f"API error: {exc}",
+            account=account,
+            profile_id=profile_id,
+        )
         return {"success": False, "message": f"API error: {exc}"}
 
 
@@ -1060,7 +1104,7 @@ def deliver_queued_notifications(db: Session, profile_id: int) -> dict:
         return {"delivered": 0, "failed": 0, "reason": "still in quiet hours"}
 
     try:
-        client = _get_pushover_client(db)
+        client = _get_pushover_client(db, profile_id=profile_id)
     except PushoverNotConfiguredError as exc:
         return {"delivered": 0, "failed": 0, "reason": str(exc)}
 

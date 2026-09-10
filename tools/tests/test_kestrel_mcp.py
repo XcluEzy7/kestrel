@@ -69,7 +69,7 @@ class TestConfiguration:
         original_key = srv.API_KEY
         srv.API_KEY = "test-key"
         h = srv._headers()
-        assert h["X-API-Key"] == "test-key"
+        assert h["Authorization"] == "Bearer test-key"
         srv.API_KEY = original_key
 
 

@@ -26,6 +26,9 @@ dependencies = [
     "slowapi>=0.1.9",
     "cryptography>=42.0.0",
     "rapidfuzz>=3.6.0",
+    "pyjwt[crypto]>=2.10.1",
+    # Remote authenticated Streamable HTTP MCP endpoint.
+    "mcp>=1.0.0,<2.0.0",
 ]
 
 [project.urls]
@@ -38,10 +41,10 @@ Documentation = "https://github.com/pleasedodisturb/kestrel/blob/main/docs/QUICK
 warn = [
     "warn-scraper>=0.4.0",
 ]
-# Optional: the standalone Kestrel MCP server (tools/kestrel-mcp/server.py).
-# Only needed to run that server or its tests; the core app never imports it.
+# Optional: dependencies for standalone Kestrel MCP client packaging
+# (tools/kestrel-mcp/server.py). The hosted endpoint uses core mcp dependency.
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2.0.0",
 ]
 dev = [
     "pytest>=8.3.0",

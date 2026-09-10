@@ -13,7 +13,12 @@ import type {
 const API_BASE = "/api/applications";
 
 /** Default profile ID used for all requests. */
-export const DEFAULT_PROFILE_ID = 1;
+export let DEFAULT_PROFILE_ID = 1;
+
+/** Replace bootstrap profile after server authenticates account. */
+export function setDefaultProfileId(profileId: number): void {
+  DEFAULT_PROFILE_ID = profileId;
+}
 
 /**
  * Fetch all (non-archived) applications for the default profile.

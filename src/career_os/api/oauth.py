@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from career_os.config import settings
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.schemas.integrations import IntegrationConfigUpdate
 from career_os.services.integrations import get_integration, update_integration
 
@@ -31,12 +33,7 @@ _MAX_PENDING = 100
 _VERIFIER_TTL_SECONDS = 600  # 10 minutes
 
 _pending_verifiers: dict[str, tuple[str, float]] = {}  # state → (verifier, created_at)
-
-# In-memory store for the OAuth-obtained API key.
-# Using a module-level variable instead of os.environ avoids leaking the key
-# to child processes and /proc/<pid>/environ.  Also persisted to DB for
-# durability across restarts.
-_runtime_api_key: str = ""
+_pending_accounts: dict[str, int | None] = {}  # state → initiating account ID
 
 OPENROUTER_AUTH_URL = "https://openrouter.ai/auth"
 OPENROUTER_KEYS_URL = "https://openrouter.ai/api/v1/auth/keys"
@@ -48,6 +45,7 @@ def _cleanup_expired() -> None:
     expired = [k for k, (_, ts) in _pending_verifiers.items() if now - ts > _VERIFIER_TTL_SECONDS]
     for k in expired:
         del _pending_verifiers[k]
+        _pending_accounts.pop(k, None)
 
 
 def _generate_pkce_pair() -> tuple[str, str]:
@@ -65,7 +63,10 @@ def _generate_pkce_pair() -> tuple[str, str]:
 
 @router.get("/openrouter/start", responses={429: {"description": "Too many requests"}})
 @limiter.limit("10/minute")
-async def openrouter_auth_start(request: Request) -> dict:
+async def openrouter_auth_start(
+    request: Request,
+    account: Annotated[Account | None, Depends(current_account)],
+) -> dict:
     """Generate PKCE challenge and return the OpenRouter authorization URL.
 
     The frontend should redirect or open this URL so the user can authorize
@@ -83,6 +84,7 @@ async def openrouter_auth_start(request: Request) -> dict:
     state = secrets.token_urlsafe(32)
 
     _pending_verifiers[state] = (code_verifier, time.time())
+    _pending_accounts[state] = account.id if account else None
 
     # Build callback URL from the backend's own address.
     callback_url = f"{settings.frontend_url}/api/auth/openrouter/callback"
@@ -113,6 +115,7 @@ async def openrouter_auth_callback(
     code: Annotated[str, Query(description="Authorization code from OpenRouter")],
     state: Annotated[str, Query(min_length=1, description="State token for PKCE verification")],
     db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
 ) -> dict:
     """Exchange the authorization code for an OpenRouter API key.
 
@@ -122,12 +125,19 @@ async def openrouter_auth_callback(
     _cleanup_expired()
 
     entry = _pending_verifiers.pop(state, None)
+    state_account_id = _pending_accounts.pop(state, None)
     if entry is None:
         raise HTTPException(
             status_code=400,
             detail="Invalid or expired state parameter. Please restart the OAuth flow.",
         )
     code_verifier, created_at = entry
+    account_id = account.id if account else None
+    if state_account_id != account_id or (account is not None and state_account_id is None):
+        raise HTTPException(
+            status_code=400,
+            detail="OAuth state does not belong to the current account. Please restart the OAuth flow.",
+        )
     if time.time() - created_at > _VERIFIER_TTL_SECONDS:
         raise HTTPException(
             status_code=400,
@@ -159,11 +169,8 @@ async def openrouter_auth_callback(
     if not api_key:
         raise HTTPException(status_code=502, detail="OpenRouter returned an empty API key.")
 
-    # Store in application memory (avoids /proc/<pid>/environ leak).
-    global _runtime_api_key  # noqa: PLW0603
-    _runtime_api_key = api_key
-
-    # Persist to database for durability across restarts.
+    # Persist only in account-owned configuration. Never mutate process-global
+    # credentials: one account must not affect another account's provider.
     update_integration(
         db,
         "ai_providers",
@@ -171,27 +178,19 @@ async def openrouter_auth_callback(
             enabled=True,
             credentials={"openrouter_api_key": api_key},
         ),
+        account=account,
     )
-    logger.info("OpenRouter API key stored in memory and persisted to database.")
+    logger.info("OpenRouter API key stored in account-owned database configuration.")
 
     return {"success": True, "provider": "openrouter"}
 
 
-def _get_stored_api_key(db: Session) -> str:
-    """Read the OpenRouter API key: runtime memory → DB → settings fallback."""
-    if _runtime_api_key:
-        return _runtime_api_key
-    integration = get_integration(db, "ai_providers")
-    if integration is not None and integration.credentials_set.get("openrouter_api_key"):
-        # Key exists in DB but we can't read the raw value from the response
-        # schema (it only reports booleans). Fall through to settings.
-        pass
-    return settings.openrouter_api_key
-
-
 @router.get("/openrouter/status")
-async def openrouter_auth_status(db: Annotated[Session, Depends(get_db)]) -> dict:
+async def openrouter_auth_status(
+    db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
+) -> dict:
     """Check whether an OpenRouter API key is currently configured."""
-    key = _get_stored_api_key(db)
-    connected = bool(key)
+    integration = get_integration(db, "ai_providers", account=account)
+    connected = bool(integration and integration.credentials_set.get("openrouter_api_key", False))
     return {"connected": connected, "provider": "openrouter"}

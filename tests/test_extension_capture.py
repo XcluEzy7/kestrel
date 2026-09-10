@@ -311,7 +311,8 @@ class TestPromote:
 
 
 # ---------------------------------------------------------------------------
-# No schema drift: this plan adds ZERO Alembic migrations
+# Part B adds no migrations; integration branch may carry migrations from the
+# separately delivered authentication/provider/MCP tickets.
 # ---------------------------------------------------------------------------
 
 
@@ -320,8 +321,9 @@ def test_no_new_alembic_migration_added():
 
     The link column ``DiscoveredJob.application_id`` already exists; capture and
     promote write only to existing tables. Compare the versions/ dir against the
-    branch merge-base with main so this stays correct even as unrelated migrations
-    land on main. Skips cleanly if git isn't available (e.g. an sdist test run).
+    branch merge-base with main, allowing only migrations belonging to the
+    integrated KST tickets. Skips cleanly if git isn't available (e.g. an sdist
+    test run).
     """
     import subprocess
 
@@ -351,4 +353,10 @@ def test_no_new_alembic_migration_added():
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         pytest.skip("git unavailable — migration-leak guard runs in CI")
-    assert not changed, f"Part B must add no migration; changed: {changed}"
+    allowed = {
+        "src/career_os/_alembic/versions/x6y7z8a9b0c1_add_shoo_auth_ownership.py",
+        "src/career_os/_alembic/versions/y7z8a9b0c1d2_add_provider_connections.py",
+        "src/career_os/_alembic/versions/z8a9b0c1d2e3_add_mcp_tokens.py",
+    }
+    unexpected = sorted(set(changed.splitlines()) - allowed) if changed else []
+    assert not unexpected, f"Part B added unexpected migrations: {unexpected}"

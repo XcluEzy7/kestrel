@@ -32,7 +32,7 @@ def _headers() -> dict[str, str]:
     """Build request headers with optional auth."""
     h: dict[str, str] = {"Content-Type": "application/json"}
     if API_KEY:
-        h["X-API-Key"] = API_KEY
+        h["Authorization"] = f"Bearer {API_KEY}"
     return h
 
 

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from career_os.api.constants import DESC_PROFILE_ID, RESP_404
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
 from career_os.models.models import Application, FollowUp
 from career_os.models.skills import Goal
 from career_os.models.ticktick_sync import TickTickSyncTask
@@ -155,9 +157,10 @@ async def ticktick_pull(
 @router.post("/test")
 async def ticktick_test_connection(
     db: Annotated[Session, Depends(get_db)],
+    account: Annotated[Account | None, Depends(current_account)],
 ) -> TickTickConnectionTestResponse:
     """Test the TickTick API connection."""
-    success, message = check_ticktick_connection(db)
+    success, message = check_ticktick_connection(db, account=account)
     return TickTickConnectionTestResponse(
         success=success,
         message=message,

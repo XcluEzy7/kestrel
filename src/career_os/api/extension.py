@@ -25,7 +25,9 @@ from career_os import __version__
 from career_os.ai.base import ProviderQuotaError
 from career_os.ai.openrouter_provider import CreditsExhaustedError
 from career_os.api.oauth import limiter
+from career_os.config import settings
 from career_os.database import get_db
+from career_os.models.models import Profile
 from career_os.schemas.extension import (
     CaptureRequest,
     CaptureResponse,
@@ -49,8 +51,8 @@ from career_os.services.extension_capture import (
 )
 from career_os.services.extension_pairing import (
     consume_pairing_code,
+    extension_token_account,
     mint_extension_token,
-    verify_extension_token,
 )
 from career_os.services.scoring import (
     ProfileIncompleteError,
@@ -73,19 +75,17 @@ def _instance_info() -> InstanceInfo:
 
 def require_extension_token(
     authorization: Annotated[str | None, Header()] = None,
-) -> str:
-    """Extract and validate the Bearer extension token; raise 401 otherwise.
-
-    Enforced per-route so it governs even though the global AUTH_API_KEY
-    middleware bypasses /api/extension/ (the extension uses a separate token
-    space). Returns the validated token for handlers that want it.
-    """
+) -> int | None:
+    """Validate dedicated bearer token and return its bound account ID."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Extension not paired")
-    token = authorization[7:]  # strip "Bearer "
-    if not verify_extension_token(token):
+    token = authorization[7:]
+    account_id = extension_token_account(token)
+    if account_id is False:
         raise HTTPException(status_code=401, detail="Extension not paired")
-    return token
+    if settings.shoo_auth_enabled and account_id is None:
+        raise HTTPException(status_code=401, detail="Extension not paired")
+    return account_id
 
 
 @router.post(
@@ -95,21 +95,20 @@ def require_extension_token(
 )
 @limiter.limit("5/minute")
 def pair(request: Request, payload: PairRequest) -> PairResponse:
-    """Validate a pairing code and mint a dedicated extension token.
-
-    Rate-limited to 5 attempts/min/IP (shared slowapi limiter, same instance the
-    app wires to ``app.state.limiter``) to kill brute-force of the 6-digit code —
-    T-01A-01. slowapi requires the ``request: Request`` first parameter.
-    """
-    if not consume_pairing_code(payload.pairing_code):
+    """Consume pairing code and mint dedicated account-bound token."""
+    account_id = consume_pairing_code(payload.pairing_code)
+    if account_id is False:
         raise HTTPException(status_code=401, detail="Invalid or expired pairing code")
-    return PairResponse(token=mint_extension_token(), instance=_instance_info())
+    if settings.shoo_auth_enabled and type(account_id) is not int:
+        raise HTTPException(status_code=401, detail="Pairing requires an account")
+    owner_id = account_id if type(account_id) is int else None
+    return PairResponse(token=mint_extension_token(owner_id), instance=_instance_info())
 
 
 @router.post("/capture", response_model=CaptureResponse)
 async def capture(
     payload: CaptureRequest,
-    _token: Annotated[str, Depends(require_extension_token)],
+    account_id: Annotated[int | None, Depends(require_extension_token)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CaptureResponse:
     """Dedupe + score a captured job, returning its score, breakdown and gap.
@@ -119,9 +118,14 @@ async def capture(
     Domain exceptions map to HTTP mirroring ``api/scoring.py`` (T-01B-04: the
     response is an explicit Pydantic model, never a raw ORM dump).
     """
-    # Profile is fixed server-side to the single-user default; never honor a
-    # client-supplied profile_id (MED-01 / SECURITY F-2). Matches /promote.
     profile_id = 1
+    if account_id is not None:
+        profile = (
+            db.query(Profile).filter(Profile.account_id == account_id).order_by(Profile.id).first()
+        )
+        if profile is None:
+            raise HTTPException(status_code=401, detail="Extension owner not found")
+        profile_id = profile.id
     try:
         dj, scored = await capture_and_score(db, payload, profile_id=profile_id)
     except CaptureTooLargeError as exc:
@@ -167,7 +171,7 @@ async def capture(
 @router.post("/promote", response_model=PromoteResponse)
 def promote(
     payload: PromoteRequest,
-    _token: Annotated[str, Depends(require_extension_token)],
+    account_id: Annotated[int | None, Depends(require_extension_token)],
     db: Annotated[Session, Depends(get_db)],
 ) -> PromoteResponse:
     """Add a captured DiscoveredJob to the pipeline (idempotent one-click promote).
@@ -177,6 +181,13 @@ def promote(
     Application (the DiscoveredJob↔Application link is ``DiscoveredJob.application_id``).
     """
     profile_id = 1
+    if account_id is not None:
+        profile = (
+            db.query(Profile).filter(Profile.account_id == account_id).order_by(Profile.id).first()
+        )
+        if profile is None:
+            raise HTTPException(status_code=401, detail="Extension owner not found")
+        profile_id = profile.id
     try:
         app = promote_discovered_job_to_application(
             db,
@@ -200,7 +211,7 @@ def promote(
 
 @router.get("/status", response_model=StatusResponse)
 def status(
-    _token: Annotated[str, Depends(require_extension_token)],
+    _account_id: Annotated[int | None, Depends(require_extension_token)],
 ) -> StatusResponse:
     """Report instance info to a paired extension (health/identity check)."""
     return StatusResponse(ok=True, instance=_instance_info())

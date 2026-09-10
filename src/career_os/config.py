@@ -32,10 +32,20 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8100
     frontend_url: str = "http://localhost:8101"
+    mcp_resource_url: str = ""
 
     # Auth — disabled by default for local use
     auth_enabled: bool = False
     auth_api_key: str = ""
+    # Shoo browser authentication. Disabled preserves local API-key development mode.
+    shoo_auth_enabled: bool = False
+    shoo_app_origin: str = "http://localhost:8101"
+    shoo_jwks_url: str = "https://shoo.dev/.well-known/jwks.json"
+    session_ttl_seconds: int = Field(default=86400, ge=300, le=2592000)
+    session_cookie_name: str = "kestrel_session"
+    session_cookie_secure: bool = True
+    # Explicit one-time operator opt-in for assigning pre-auth profiles on first login.
+    shoo_claim_legacy_data: bool = False
 
     # Data directory
     data_dir: Path = Path("data")
@@ -230,6 +240,8 @@ class Settings(BaseSettings):
                 "AUTH_API_KEY is required when AUTH_ENABLED=true. "
                 "Set it in your .env file or environment."
             )
+        if self.shoo_auth_enabled and not self.session_cookie_secure:
+            raise ValueError("SESSION_COOKIE_SECURE must be true when SHOO_AUTH_ENABLED=true")
         return self
 
 

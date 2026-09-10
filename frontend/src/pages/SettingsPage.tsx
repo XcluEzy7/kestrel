@@ -24,7 +24,18 @@ import type {
   IntegrationConfigResponse,
   IntegrationConfigUpdate,
 } from "@/api/integrations";
+import {
+  createMcpToken,
+  fetchMcpTokens,
+  revokeMcpToken,
+} from "@/api/auth";
+import type {
+  McpTokenCreate,
+  McpTokenCreatedResponse,
+  McpTokenResponse,
+} from "@/api/auth";
 import { IntegrationPanel } from "@/components/IntegrationPanel";
+import { ProviderConnections } from "@/components/ProviderConnections";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User,
@@ -34,6 +45,7 @@ import {
   Save,
   X,
   Plug,
+  Copy,
 } from "lucide-react";
 
 type SettingsTab = "profiles" | "integrations";
@@ -176,6 +188,8 @@ function IntegrationsSection() {
         Configure external integrations. Enable an integration, enter your
         credentials, and test the connection.
       </p>
+      <ProviderConnections />
+      <McpTokensSection />
       {integrations.map((integration: IntegrationConfigResponse) => (
         <IntegrationPanel
           key={integration.name}
@@ -187,6 +201,210 @@ function IntegrationsSection() {
         />
       ))}
     </div>
+  );
+}
+
+// ========================= MCP Tokens Section =========================
+
+function McpTokensSection() {
+  const queryClient = useQueryClient();
+  const { data: tokens, isLoading, error } = useQuery({
+    queryKey: ["mcp-tokens"],
+    queryFn: fetchMcpTokens,
+  });
+  const [name, setName] = useState("MCP client");
+  const [readScope, setReadScope] = useState(true);
+  const [writeScope, setWriteScope] = useState(false);
+  const [expiresInDays, setExpiresInDays] = useState("");
+  const [createdToken, setCreatedToken] = useState<McpTokenCreatedResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: (payload: McpTokenCreate) => createMcpToken(payload),
+    onSuccess: (token) => {
+      setCreatedToken(token);
+      setCopied(false);
+      setName("MCP client");
+      setReadScope(true);
+      setWriteScope(false);
+      setExpiresInDays("");
+      void queryClient.invalidateQueries({ queryKey: ["mcp-tokens"] });
+    },
+  });
+  const revokeMutation = useMutation({
+    mutationFn: revokeMcpToken,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["mcp-tokens"] });
+    },
+  });
+
+  const handleCreate = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const scopes = [
+      ...(readScope ? ["mcp:read"] : []),
+      ...(writeScope ? ["mcp:write"] : []),
+    ];
+    if (!name.trim() || scopes.length === 0) return;
+    createMutation.mutate({
+      name: name.trim(),
+      scopes,
+      expires_in_days: expiresInDays ? Number(expiresInDays) : null,
+    });
+  };
+
+  const handleRevoke = (token: McpTokenResponse) => {
+    if (token.revoked_at || !window.confirm(`Revoke MCP token “${token.name}”?`)) return;
+    revokeMutation.mutate(token.id);
+  };
+
+  const handleCopy = async () => {
+    if (!createdToken) return;
+    try {
+      await navigator.clipboard.writeText(createdToken.token);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <section
+      data-testid="mcp-tokens-section"
+      aria-labelledby="mcp-tokens-heading"
+      className="rounded-lg border bg-white p-6 shadow-sm"
+    >
+      <div className="mb-4">
+        <h2 id="mcp-tokens-heading" className="text-lg font-semibold text-gray-900">
+          MCP server tokens
+        </h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Create scoped tokens for remote MCP clients. Secrets appear once and are never stored in this list.
+        </p>
+      </div>
+
+      {isLoading && (
+        <p data-testid="mcp-tokens-loading" className="text-sm text-gray-500">Loading MCP tokens…</p>
+      )}
+      {error && (
+        <p data-testid="mcp-tokens-error" role="alert" className="mb-4 text-sm text-red-700">
+          {error instanceof Error ? error.message : String(error)}
+        </p>
+      )}
+      {(createMutation.isError || revokeMutation.isError) && (
+        <p data-testid="mcp-tokens-mutation-error" role="alert" className="mb-4 text-sm text-red-700">
+          {(createMutation.error ?? revokeMutation.error) instanceof Error
+            ? (createMutation.error ?? revokeMutation.error)?.message
+            : "MCP token request failed"}
+        </p>
+      )}
+
+      {createdToken && (
+        <div data-testid="mcp-token-secret" role="status" className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4">
+          <p className="font-medium text-amber-900">Copy this secret now. It will not be shown again.</p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded bg-white px-2 py-1 text-sm text-gray-900">
+              {createdToken.token}
+            </code>
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label="Copy MCP token secret"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <Copy className="h-4 w-4" />
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !error && (
+        <div className="mb-6 overflow-x-auto">
+          <h3 className="mb-2 text-sm font-medium text-gray-900">Existing tokens</h3>
+          {(tokens ?? []).length === 0 ? (
+            <p data-testid="mcp-tokens-empty" className="text-sm text-gray-500">No MCP tokens created.</p>
+          ) : (
+            <ul data-testid="mcp-tokens-list" className="divide-y rounded-md border">
+              {(tokens ?? []).map((token) => (
+                <li key={token.id} className="flex items-center justify-between gap-4 p-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">{token.name}</p>
+                    <p className="text-gray-500">
+                      {token.token_prefix} · {token.scopes.join(", ")}
+                      {token.expires_at ? ` · Expires ${new Date(token.expires_at).toLocaleDateString()}` : " · Never expires"}
+                      {token.revoked_at ? " · Revoked" : ""}
+                    </p>
+                  </div>
+                  {!token.revoked_at && (
+                    <button
+                      type="button"
+                      onClick={() => handleRevoke(token)}
+                      disabled={revokeMutation.isPending}
+                      className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <form onSubmit={handleCreate} className="space-y-4 border-t pt-4">
+        <h3 className="text-sm font-medium text-gray-900">Create token</h3>
+        <div>
+          <label htmlFor="mcp-token-name" className="block text-sm font-medium text-gray-700">Name</label>
+          <input
+            id="mcp-token-name"
+            data-testid="mcp-token-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            maxLength={100}
+            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+          />
+        </div>
+        <fieldset>
+          <legend className="text-sm font-medium text-gray-700">Scopes</legend>
+          <div className="mt-2 flex flex-wrap gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={readScope} onChange={(event) => setReadScope(event.target.checked)} />
+              Read
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={writeScope} onChange={(event) => setWriteScope(event.target.checked)} />
+              Write
+            </label>
+          </div>
+        </fieldset>
+        <div>
+          <label htmlFor="mcp-token-expiry" className="block text-sm font-medium text-gray-700">Expires in</label>
+          <select
+            id="mcp-token-expiry"
+            data-testid="mcp-token-expiry"
+            value={expiresInDays}
+            onChange={(event) => setExpiresInDays(event.target.value)}
+            className="mt-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+          >
+            <option value="">Never</option>
+            <option value="7">7 days</option>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">365 days</option>
+          </select>
+        </div>
+        <button
+          type="submit"
+          data-testid="mcp-token-create"
+          disabled={createMutation.isPending || !name.trim() || (!readScope && !writeScope)}
+          className="inline-flex items-center rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-50"
+        >
+          {createMutation.isPending ? "Creating…" : "Create token"}
+        </button>
+      </form>
+    </section>
   );
 }
 

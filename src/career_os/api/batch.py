@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 
 from career_os.ai.factory import get_ai_provider
 from career_os.database import get_db
+from career_os.dependencies import current_account
+from career_os.models.auth import Account
+from career_os.models.models import Profile
 from career_os.services.async_batch import (
     BatchNotReadyError,
     BatchResultError,
@@ -22,6 +25,7 @@ from career_os.services.async_batch import (
     retrieve_batch_results,
     submit_batch,
 )
+from career_os.services.auth import create_batch_mapping, owned_batch
 from career_os.services.scoring import (
     ProfileIncompleteError,
     ProfileNotFoundError,
@@ -109,6 +113,7 @@ class BatchResultsResponse(BaseModel):
 )
 async def batch_submit_endpoint(
     payload: BatchSubmitRequest,
+    account: Annotated[Account | None, Depends(current_account)],
     db: Annotated[Session, Depends(get_db)],
 ) -> BatchSubmitResponse:
     """Submit an async batch of jobs for scoring.
@@ -119,6 +124,13 @@ async def batch_submit_endpoint(
 
     Returns a ``batch_id`` for polling status and retrieving results.
     """
+    profile_filters = [Profile.id == payload.profile_id]
+    if account is not None:
+        profile_filters.append(Profile.account_id == account.id)
+    profile = db.query(Profile).filter(*profile_filters).first()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
     try:
         profile_data = build_profile_data(db, payload.profile_id)
     except ProfileNotFoundError:
@@ -135,8 +147,11 @@ async def batch_submit_endpoint(
     except BatchSubmissionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    public_id = batch_id
+    if account is not None:
+        public_id = create_batch_mapping(db, account, profile, provider.name, batch_id).public_id
     return BatchSubmitResponse(
-        batch_id=batch_id,
+        batch_id=public_id,
         provider=provider.name,
         job_count=len(jobs),
     )
@@ -150,18 +165,27 @@ async def batch_submit_endpoint(
 )
 async def batch_status_endpoint(
     batch_id: str,
+    account: Annotated[Account | None, Depends(current_account)],
+    db: Annotated[Session, Depends(get_db)],
     provider: Annotated[str | None, Query(description="AI provider name")] = None,
 ) -> BatchStatusResponse:
-    """Check the status of an async batch scoring job."""
+    """Check status of an account-owned asynchronous batch."""
+    provider_batch_id = batch_id
+    if account is not None:
+        mapping = owned_batch(db, account, batch_id)
+        if mapping is None:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        provider = mapping.provider
+        provider_batch_id = mapping.provider_batch_id
     ai_provider = get_ai_provider(provider)
 
     try:
-        status = await check_batch_status(ai_provider, batch_id)
+        status = await check_batch_status(ai_provider, provider_batch_id)
     except BatchResultError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return BatchStatusResponse(
-        batch_id=status["batch_id"],
+        batch_id=batch_id,
         status=status["status"],
         provider=status["provider"],
     )
@@ -176,17 +200,22 @@ async def batch_status_endpoint(
 )
 async def batch_results_endpoint(
     batch_id: str,
+    account: Annotated[Account | None, Depends(current_account)],
+    db: Annotated[Session, Depends(get_db)],
     provider: Annotated[str | None, Query(description="AI provider name")] = None,
 ) -> BatchResultsResponse:
-    """Retrieve results of a completed async batch scoring job.
-
-    Returns 202 if the batch is still processing. Returns results only
-    when all jobs have been scored.
-    """
+    """Retrieve results for an account-owned completed batch."""
+    provider_batch_id = batch_id
+    if account is not None:
+        mapping = owned_batch(db, account, batch_id)
+        if mapping is None:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        provider = mapping.provider
+        provider_batch_id = mapping.provider_batch_id
     ai_provider = get_ai_provider(provider)
 
     try:
-        results = await retrieve_batch_results(ai_provider, batch_id)
+        results = await retrieve_batch_results(ai_provider, provider_batch_id)
     except BatchNotReadyError:
         raise HTTPException(
             status_code=202,

@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,9 +34,11 @@ from career_os.api.onboarding import router as onboarding_router
 from career_os.api.presets import router as presets_router
 from career_os.api.privacy import router as privacy_router
 from career_os.api.profiles import router as profiles_router
+from career_os.api.provider_connections import router as provider_connections_router
 from career_os.api.pushover import router as pushover_router
 from career_os.api.research import router as research_router
 from career_os.api.scoring import router as scoring_router
+from career_os.api.shoo_auth import router as shoo_auth_router
 from career_os.api.skills import router as skills_router
 from career_os.api.star_stories import app_router as star_stories_app_router
 from career_os.api.star_stories import router as star_stories_router
@@ -44,7 +46,9 @@ from career_os.api.ticktick import router as ticktick_router
 from career_os.api.voice import router as voice_router
 from career_os.config import settings
 from career_os.database import SessionLocal
+from career_os.dependencies import authorize_private_request
 from career_os.discovery.scheduler import start_scheduler, stop_scheduler
+from career_os.mcp_server import app as mcp_app
 from career_os.migration.seed import seed_default_profile, seed_ghost_detection_records
 from career_os.models.models import Application
 from career_os.services.occupation_taxonomy import populate_occupations
@@ -191,10 +195,15 @@ app = FastAPI(
     title=settings.app_name,
     description="AI-Powered Job Search & Career Strategy Platform",
     version=__version__,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if settings.shoo_auth_enabled else "/docs",
+    redoc_url=None if settings.shoo_auth_enabled else "/redoc",
+    openapi_url=None if settings.shoo_auth_enabled else "/openapi.json",
     lifespan=lifespan,
 )
+
+# Hosted remote MCP endpoint. Token verifier resolves account/profile ownership
+# from hashed database records; no caller-supplied profile ID reaches tools.
+app.mount("/mcp", mcp_app())
 
 # Rate limiting for OAuth endpoints
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402
@@ -268,38 +277,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(ai_router)
-app.include_router(analytics_router)
-app.include_router(batch_router)
-app.include_router(calendar_router)
-app.include_router(applications_router)
-app.include_router(coaching_router)
-app.include_router(contacts_router)
-app.include_router(discovery_router)
+_private_dependencies = [Depends(authorize_private_request)]
+app.include_router(ai_router, dependencies=_private_dependencies)
+app.include_router(analytics_router, dependencies=_private_dependencies)
+app.include_router(batch_router, dependencies=_private_dependencies)
+app.include_router(calendar_router, dependencies=_private_dependencies)
+app.include_router(applications_router, dependencies=_private_dependencies)
+app.include_router(coaching_router, dependencies=_private_dependencies)
+app.include_router(contacts_router, dependencies=_private_dependencies)
+app.include_router(discovery_router, dependencies=_private_dependencies)
 app.include_router(extension_router)
-app.include_router(follow_ups_router)
-app.include_router(gaps_router)
-app.include_router(goals_router)
-app.include_router(integrations_router)
-app.include_router(intelligence_router)
-app.include_router(interview_prep_router)
-app.include_router(jobs_router)
-app.include_router(learning_router)
-app.include_router(market_router)
-app.include_router(oauth_router)
-app.include_router(onboarding_router)
-app.include_router(presets_router)
-app.include_router(privacy_router)
-app.include_router(profiles_router)
-app.include_router(pushover_router)
-app.include_router(research_router)
-app.include_router(scoring_router)
-app.include_router(skills_router)
-app.include_router(star_stories_router)
-app.include_router(star_stories_app_router)
-app.include_router(ticktick_router)
-app.include_router(voice_router)
+app.include_router(follow_ups_router, dependencies=_private_dependencies)
+app.include_router(gaps_router, dependencies=_private_dependencies)
+app.include_router(goals_router, dependencies=_private_dependencies)
+app.include_router(integrations_router, dependencies=_private_dependencies)
+app.include_router(intelligence_router, dependencies=_private_dependencies)
+app.include_router(interview_prep_router, dependencies=_private_dependencies)
+app.include_router(jobs_router, dependencies=_private_dependencies)
+app.include_router(learning_router, dependencies=_private_dependencies)
+app.include_router(market_router, dependencies=_private_dependencies)
+app.include_router(oauth_router, dependencies=_private_dependencies)
+app.include_router(shoo_auth_router)
+app.include_router(onboarding_router, dependencies=_private_dependencies)
+app.include_router(presets_router, dependencies=_private_dependencies)
+app.include_router(privacy_router, dependencies=_private_dependencies)
+app.include_router(profiles_router, dependencies=_private_dependencies)
+app.include_router(provider_connections_router, dependencies=_private_dependencies)
+app.include_router(pushover_router, dependencies=_private_dependencies)
+app.include_router(research_router, dependencies=_private_dependencies)
+app.include_router(scoring_router, dependencies=_private_dependencies)
+app.include_router(skills_router, dependencies=_private_dependencies)
+app.include_router(star_stories_router, dependencies=_private_dependencies)
+app.include_router(star_stories_app_router, dependencies=_private_dependencies)
+app.include_router(ticktick_router, dependencies=_private_dependencies)
+app.include_router(voice_router, dependencies=_private_dependencies)
 
 
 @app.get("/health")

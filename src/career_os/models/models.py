@@ -32,6 +32,9 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -79,6 +82,9 @@ class Profile(Base):
         cascade=CASCADE_ALL_DELETE_ORPHAN
     )
 
+    account: Mapped["Account | None"] = relationship(  # noqa: F821
+        "Account", back_populates="profiles"
+    )
     # Onboarding state (one-to-one, optional — may not exist for pre-onboarding profiles)
     onboarding_state: Mapped["OnboardingState | None"] = relationship(  # noqa: F821
         "OnboardingState", back_populates="profile", uselist=False

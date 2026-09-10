@@ -36,6 +36,12 @@ docker compose up --build
 | `OPENROUTER_API_KEY` | (empty) | Required when `AI_PROVIDER=openrouter` |
 | `AUTH_ENABLED` | `false` | Enable API key authentication |
 | `AUTH_API_KEY` | (empty) | Required when `AUTH_ENABLED=true` |
+| `SHOO_AUTH_ENABLED` | `false` | Require Shoo login for private browser/API data |
+| `SHOO_APP_ORIGIN` | (empty) | Shoo origin used to validate ID-token audience |
+| `SHOO_JWKS_URL` | `https://shoo.dev/.well-known/jwks.json` | Shoo signing-key endpoint |
+| `SESSION_COOKIE_SECURE` | `true` | Send session and CSRF cookies only over HTTPS |
+| `SESSION_COOKIE_NAME` | `kestrel_session` | Browser session cookie name |
+| `MCP_RESOURCE_URL` | (empty) | Canonical public URL for hosted MCP resource |
 | `DEBUG` | `false` | Enable debug logging |
 | `PORT` | `8100` | Server port |
 | `FRONTEND_URL` | `*` | CORS origin (use `*` when serving from same container) |
@@ -81,6 +87,12 @@ Set these in the Railway dashboard under your service's **Variables** tab:
 | `OPENROUTER_API_KEY` | (empty) | Required when `AI_PROVIDER=openrouter` |
 | `AUTH_ENABLED` | `false` | Enable API key authentication |
 | `AUTH_API_KEY` | (empty) | Required when `AUTH_ENABLED=true` |
+| `SHOO_AUTH_ENABLED` | `false` | Enable authenticated browser and hosted MCP token management |
+| `SHOO_APP_ORIGIN` | (empty) | Public Shoo application origin / audience |
+| `SHOO_JWKS_URL` | `https://shoo.dev/.well-known/jwks.json` | Shoo signing-key endpoint |
+| `SESSION_COOKIE_SECURE` | `true` | Keep production session cookies Secure |
+| `SESSION_COOKIE_NAME` | `kestrel_session` | Browser session cookie name |
+| `MCP_RESOURCE_URL` | (empty) | Public MCP URL, for example `https://example.com/mcp` |
 | `PORT` | `8100` | Server port (Railway sets this automatically via `$PORT`) |
 
 `DATABASE_URL` and `FRONTEND_URL` are pre-configured in the Dockerfile and do not need to be set.

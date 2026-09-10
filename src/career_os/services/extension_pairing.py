@@ -170,32 +170,21 @@ def _write_pairing_file(payload: str) -> None:
             tmp.unlink()
 
 
-def mint_pairing_code() -> str:
-    """Mint a fresh single-use 6-digit pairing code and persist its hash+expiry.
-
-    Returns the plaintext code (shown once to the user); the file stores only
-    ``sha256(code)`` so a leak of the file never reveals the code. Overwrites any
-    prior nonce, so each CLI invocation invalidates the previous code.
-    """
+def mint_pairing_code(account_id: int | None = None) -> str:
+    """Mint single-use code, bound to account when Shoo auth is enabled."""
     code = f"{secrets.randbelow(1_000_000):06d}"
-    payload = json.dumps(
-        {
-            "hash": hashlib.sha256(code.encode()).hexdigest(),
-            "expires": time.time() + settings.extension_pairing_ttl_seconds,
-        }
-    )
-    _write_pairing_file(payload)
+    payload = {
+        "hash": hashlib.sha256(code.encode()).hexdigest(),
+        "expires": time.time() + settings.extension_pairing_ttl_seconds,
+    }
+    if account_id is not None:
+        payload["account_id"] = account_id
+    _write_pairing_file(json.dumps(payload))
     return code
 
 
-def consume_pairing_code(code: str | None) -> bool:
-    """Return True once for the matching, non-expired code, then delete the file.
-
-    Single-use: a second call with the same code returns False (the file is gone).
-    Returns False for empty/None input, a missing file, an expired entry (which is
-    also cleaned up), or a wrong code. On a wrong code the file is left in place so
-    the legitimate user can retry until expiry. Comparison is timing-safe.
-    """
+def consume_pairing_code(code: str | None) -> int | None | bool:
+    """Consume matching code and return bound account ID, or False."""
     if not code:
         return False
     path = _pairing_path()
@@ -205,16 +194,17 @@ def consume_pairing_code(code: str | None) -> bool:
         data = json.loads(path.read_text(encoding="utf-8"))
         stored_hash = str(data["hash"])
         expires = float(data["expires"])
+        account_id = data.get("account_id")
     except (ValueError, KeyError, TypeError, OSError):
         return False
     if time.time() > expires:
-        path.unlink(missing_ok=True)  # stale nonce — clean up, reject
+        path.unlink(missing_ok=True)
         return False
     candidate = hashlib.sha256(str(code).encode()).hexdigest()
-    if hmac.compare_digest(candidate, stored_hash):
-        path.unlink(missing_ok=True)  # single-use: consume on success
-        return True
-    return False
+    if not hmac.compare_digest(candidate, stored_hash):
+        return False
+    path.unlink(missing_ok=True)
+    return int(account_id) if account_id is not None else True
 
 
 def reset_pairing_state() -> None:
@@ -222,50 +212,49 @@ def reset_pairing_state() -> None:
     _pairing_path().unlink(missing_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# Token — b64url(issued_ts) "." b64url(HMAC(secret, issued_ts))
-# ---------------------------------------------------------------------------
+# Token: b64url(JSON payload) "." b64url(HMAC(secret, payload))
 
 
-def mint_extension_token() -> str:
-    """Mint a stateless HMAC token the extension stores and sends as a Bearer."""
-    issued = str(int(time.time())).encode("ascii")
-    signature = hmac.new(get_extension_secret(), issued, hashlib.sha256).digest()
-    return f"{_b64url_encode(issued)}.{_b64url_encode(signature)}"
+def mint_extension_token(account_id: int | None = None) -> str:
+    """Mint dedicated extension token bound to account when supplied."""
+    payload = json.dumps(
+        {"issued": int(time.time()), "account_id": account_id}, separators=(",", ":")
+    ).encode("ascii")
+    signature = hmac.new(get_extension_secret(), payload, hashlib.sha256).digest()
+    return f"{_b64url_encode(payload)}.{_b64url_encode(signature)}"
 
 
-def verify_extension_token(token: str | None) -> bool:
-    """Return True iff the token verifies under the current secret AND is not stale.
-
-    Rejects empty input, malformed/truncated strings, and tampered signatures.
-    The signature is checked FIRST (timing-safe); only then is the embedded
-    issued-ts compared against ``settings.extension_token_ttl_days`` — so an
-    attacker learns nothing new from an expired-vs-forged distinction. A token
-    strictly older than the TTL is rejected (→ 401 re-pair). A TTL of 0 or less
-    disables the age check (signature-only), for tests and a "never expire" mode.
-    """
+def extension_token_account(token: str | None) -> int | None | bool:
+    """Return bound account ID, None for legacy token, or False when invalid."""
     if not token or not isinstance(token, str):
         return False
     parts = token.split(".")
     if len(parts) != 2 or not parts[0] or not parts[1]:
         return False
     try:
-        issued = _b64url_decode(parts[0])
+        payload = _b64url_decode(parts[0])
         signature = _b64url_decode(parts[1])
     except (ValueError, TypeError, binascii.Error):
         return False
-    expected = hmac.new(get_extension_secret(), issued, hashlib.sha256).digest()
+    expected = hmac.new(get_extension_secret(), payload, hashlib.sha256).digest()
     if not hmac.compare_digest(signature, expected):
         return False
-
-    # Max-age check (G-1391). The signed payload IS the issued epoch, so a valid
-    # signature guarantees the timestamp is authentic (not attacker-chosen).
-    ttl_days = settings.extension_token_ttl_days
-    if ttl_days > 0:
+    try:
+        data = json.loads(payload)
+        issued_ts = int(data["issued"])
+        account_id = data.get("account_id")
+    except (ValueError, KeyError, TypeError, UnicodeDecodeError):
         try:
-            issued_ts = int(issued.decode("ascii"))
+            issued_ts = int(payload.decode("ascii"))
         except (ValueError, UnicodeDecodeError):
             return False
-        if time.time() - issued_ts > ttl_days * 86400:
-            return False
-    return True
+        account_id = None
+    ttl_days = settings.extension_token_ttl_days
+    if ttl_days > 0 and time.time() - issued_ts > ttl_days * 86400:
+        return False
+    return int(account_id) if account_id is not None else None
+
+
+def verify_extension_token(token: str | None) -> bool:
+    """Return whether dedicated extension token is valid."""
+    return extension_token_account(token) is not False

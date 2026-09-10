@@ -1,5 +1,6 @@
 """SQLAlchemy models package."""
 
+from career_os.models.auth import Account, AuthBatch, AuthSession, MCPToken, ProviderConnection
 from career_os.models.calendar import CalendarEvent
 from career_os.models.company_research import CompanyResearchReportModel
 from career_os.models.contacts import Contact, ContactApplication, ContactInteraction
@@ -45,6 +46,7 @@ from career_os.models.voice import VoiceMessage, VoiceSession
 
 __all__ = [
     "ActivityLog",
+    "Account",
     "Application",
     "CalendarEvent",
     "CompanyResearchReportModel",
@@ -57,6 +59,10 @@ __all__ = [
     "ApplicationPackage",
     "CascadeDecision",
     "CoachingSuggestion",
+    "AuthBatch",
+    "AuthSession",
+    "ProviderConnection",
+    "MCPToken",
     "DistillationSample",
     "Embedding",
     "DiscoveredJob",

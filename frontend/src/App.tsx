@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthGuard } from "@/components/AuthGuard";
 import { OnboardingGuard } from "@/components/OnboardingGuard";
 import { WelcomePage } from "@/pages/WelcomePage";
 import { Pipeline } from "@/pages/Pipeline";
@@ -14,6 +15,7 @@ import { Discovery } from "@/pages/Discovery";
 import { VoiceDiscussion } from "@/pages/VoiceDiscussion";
 import { AIHealthDashboard } from "@/pages/AIHealthDashboard";
 import ContactsPage from "@/pages/ContactsPage";
+import { LoginPage } from "@/pages/LoginPage";
 import { HelpPage } from "@/pages/HelpPage";
 
 const queryClient = new QueryClient({
@@ -73,23 +75,24 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            {/* Welcome flow: no nav, no guard (D-01) */}
-            <Route path="/welcome" element={<WelcomePage />} />
-
-            {/* All other routes: guarded + Layout (D-09) */}
-            <Route element={<OnboardingGuard />}>
-              <Route path="/" element={<Pipeline />} />
-              <Route path="/applications/:id" element={<ApplicationDetail />} />
-              <Route path="/discovery" element={<Discovery />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/follow-ups" element={<FollowUps />} />
-              <Route path="/contacts" element={<ContactsPage />} />
-              <Route path="/skills" element={<Skills />} />
-              <Route path="/learning" element={<Learning />} />
-              <Route path="/voice" element={<VoiceDiscussion />} />
-              <Route path="/ai-health" element={<AIHealthDashboard />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/help" element={<HelpPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<LoginPage />} />
+            <Route element={<AuthGuard />}>
+              <Route path="/welcome" element={<WelcomePage />} />
+              <Route element={<OnboardingGuard />}>
+                <Route path="/" element={<Pipeline />} />
+                <Route path="/applications/:id" element={<ApplicationDetail />} />
+                <Route path="/discovery" element={<Discovery />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/follow-ups" element={<FollowUps />} />
+                <Route path="/contacts" element={<ContactsPage />} />
+                <Route path="/skills" element={<Skills />} />
+                <Route path="/learning" element={<Learning />} />
+                <Route path="/voice" element={<VoiceDiscussion />} />
+                <Route path="/ai-health" element={<AIHealthDashboard />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/help" element={<HelpPage />} />
+              </Route>
             </Route>
           </Routes>
         </BrowserRouter>

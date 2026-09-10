@@ -2,8 +2,7 @@
  * API client functions for onboarding status.
  */
 
-/** Default profile ID (single-user self-hosted model). */
-export const DEFAULT_PROFILE_ID = 1;
+export { DEFAULT_PROFILE_ID } from "./applications";
 
 export interface OnboardingStatus {
   profile_id: number;

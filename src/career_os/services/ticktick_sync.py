@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_ as db_or
 from sqlalchemy.orm import Session
 
+from career_os.models.auth import Account
 from career_os.models.integrations import IntegrationConfig
 from career_os.models.models import ActivityLog, Application, FollowUp
 from career_os.models.skills import Goal
@@ -36,13 +37,24 @@ class TickTickSyncError(Exception):
     """Raised when a sync operation fails."""
 
 
-def _get_ticktick_credentials(db: Session) -> tuple[str, str]:
+def _get_ticktick_credentials(
+    db: Session, *, profile_id: int | None = None, account: Account | None = None
+) -> tuple[str, str]:
     """Retrieve TickTick API token and project ID from integration config.
 
     Returns (api_token, project_id).
     Raises TickTickNotConfiguredError if not configured or disabled.
     """
-    row = db.query(IntegrationConfig).filter(IntegrationConfig.name == "ticktick").first()
+    account_id = account.id if account is not None else None
+    if account is None and profile_id is not None:
+        from career_os.models.models import Profile
+
+        account_id = db.query(Profile.account_id).filter(Profile.id == profile_id).scalar()
+    row = (
+        db.query(IntegrationConfig)
+        .filter(IntegrationConfig.name == "ticktick", IntegrationConfig.account_id == account_id)
+        .first()
+    )
     if row is None or not row.enabled:
         raise TickTickNotConfiguredError("TickTick integration is not enabled")
 
@@ -62,12 +74,16 @@ def _get_ticktick_credentials(db: Session) -> tuple[str, str]:
     return api_token, project_id
 
 
-def get_client(db: Session) -> tuple[TickTickClient, str]:
+def get_client(
+    db: Session, *, profile_id: int | None = None, account: Account | None = None
+) -> tuple[TickTickClient, str]:
     """Get a TickTickClient and project_id from stored credentials.
 
     Returns (client, project_id).
     """
-    api_token, project_id = _get_ticktick_credentials(db)
+    api_token, project_id = _get_ticktick_credentials(
+        db, profile_id=profile_id, account=account
+    )
     return TickTickClient(api_token), project_id
 
 
@@ -88,7 +104,7 @@ def sync_follow_up_to_ticktick(
     Returns the sync mapping record.
     """
     if client is None or project_id is None:
-        client, project_id = get_client(db)
+        client, project_id = get_client(db, profile_id=follow_up.profile_id)
 
     # Check if already synced
     existing = (
@@ -169,7 +185,7 @@ def sync_learning_goal_to_ticktick(
     Returns the sync mapping record.
     """
     if client is None or project_id is None:
-        client, project_id = get_client(db)
+        client, project_id = get_client(db, profile_id=goal.profile_id)
 
     existing = (
         db.query(TickTickSyncTask)
@@ -247,7 +263,7 @@ def sync_pipeline_action_to_ticktick(
     Returns the sync mapping record.
     """
     if client is None or project_id is None:
-        client, project_id = get_client(db)
+        client, project_id = get_client(db, profile_id=application.profile_id)
 
     # For pipeline actions, entity_id = application.id
     existing = (
@@ -378,7 +394,7 @@ def sync_completions_from_ticktick(
     Returns {"synced": N, "errors": M, "skipped": S}.
     """
     if client is None or project_id is None:
-        client, project_id = get_client(db)
+        client, project_id = get_client(db, profile_id=profile_id)
 
     # Fetch completed tasks from the last 15 minutes (sync cycle)
     now = datetime.now(UTC)
@@ -587,13 +603,15 @@ def get_sync_status(db: Session, *, profile_id: int) -> dict:
     }
 
 
-def check_ticktick_connection(db: Session) -> tuple[bool, str]:
+def check_ticktick_connection(
+    db: Session, *, profile_id: int | None = None, account: Account | None = None
+) -> tuple[bool, str]:
     """Test the TickTick API connection using stored credentials.
 
     Returns (success, message).
     """
     try:
-        client, _ = get_client(db)
+        client, _ = get_client(db, profile_id=profile_id, account=account)
     except TickTickNotConfiguredError as exc:
         return False, str(exc)
 
@@ -601,7 +619,19 @@ def check_ticktick_connection(db: Session) -> tuple[bool, str]:
         ok = client.test_connection()
         if ok:
             # Update integration status
-            row = db.query(IntegrationConfig).filter(IntegrationConfig.name == "ticktick").first()
+            account_id = account.id if account is not None else None
+            if account is None and profile_id is not None:
+                from career_os.models.models import Profile
+
+                account_id = db.query(Profile.account_id).filter(Profile.id == profile_id).scalar()
+            row = (
+                db.query(IntegrationConfig)
+                .filter(
+                    IntegrationConfig.name == "ticktick",
+                    IntegrationConfig.account_id == account_id,
+                )
+                .first()
+            )
             if row:
                 row.status = "connected"
                 row.status_message = "TickTick API connection successful"
