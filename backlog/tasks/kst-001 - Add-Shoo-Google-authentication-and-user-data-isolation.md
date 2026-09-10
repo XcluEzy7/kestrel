@@ -90,6 +90,8 @@ Production variables set via Railway CLI: SHOO_AUTH_ENABLED=true, SHOO_APP_ORIGI
 Investigated reported redirect loop: useShooAuth default autoHandleCallback redirected from /auth/callback before LoginPage submitted the ID token to /api/auth/shoo/login, so Kestrel never received a server session. Patched LoginPage to own callback completion, retain a validated same-origin return route, then exchange the token with Kestrel before navigation; added regression coverage.
 
 Committed callback repair as 50b5c76 and deployed local code to Railway deployment ececf06d-2979-492e-9fcb-b419888a1d85; deployment reached SUCCESS. Frontend callback regression test and npm build pass. Live health check pending final browser login attempt.
+
+Railway deployment ececf06d served stale frontend asset index-CscV4BTt.js despite local repair bundle index-fEq-KDzG.js; .dockerignore excludes frontend/dist, proving build context used stale source. Re-deployed current local source directly as 839dedb8-e362-4362-b9d3-91c1a47f1e83; status SUCCESS. Live bundle verification follows.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
