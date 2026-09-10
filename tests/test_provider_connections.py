@@ -61,11 +61,19 @@ def test_validate_target_rejects_private_and_metadata_hosts():
         validate_target("https://metadata.google.internal/v1/models")
 
 
+@pytest.mark.parametrize("address", ["100.64.0.1", "100.100.100.200", "224.0.0.1"])
+def test_validate_target_rejects_non_public_special_addresses(address):
+    with pytest.raises(ValueError, match="non-public"):
+        with patch(
+            "career_os.services.provider_connections._host_ips",
+            return_value={ipaddress.ip_address(address)},
+        ):
+            validate_target("https://provider.example/v1/models")
+
+
 def test_validate_target_returns_deterministic_public_ip():
     addresses = {ipaddress.ip_address("8.8.8.8"), ipaddress.ip_address("1.1.1.1")}
-    with patch(
-        "career_os.services.provider_connections._host_ips", return_value=addresses
-    ):
+    with patch("career_os.services.provider_connections._host_ips", return_value=addresses):
         assert validate_target("https://provider.example/v1/models") == ipaddress.ip_address(
             "1.1.1.1"
         )

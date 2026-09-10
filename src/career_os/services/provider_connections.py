@@ -31,7 +31,9 @@ _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 def local_loopback_allowed() -> bool:
     """Return whether operator explicitly enabled local provider loopback."""
-    return settings.debug or os.getenv("CAREER_OS_ALLOW_LOCAL_PROVIDER_LOOPBACK", "").strip().lower() in {
+    return settings.debug or os.getenv(
+        "CAREER_OS_ALLOW_LOCAL_PROVIDER_LOOPBACK", ""
+    ).strip().lower() in {
         "1",
         "true",
         "yes",
@@ -170,14 +172,8 @@ def validate_target(url: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
         raise ValueError("Provider target is not allowed")
     ips = _host_ips(host)
     for ip in ips:
-        if (
-            ip.is_loopback
-            or ip.is_private
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            raise ValueError("Provider target resolves to a private or local address")
+        if not ip.is_global or ip.is_multicast:
+            raise ValueError("Provider target resolves to a non-public address")
     if not ips:
         raise ValueError("Provider hostname could not be resolved")
     # Resolve once, then use this exact address for the request. Sorting keeps
@@ -188,9 +184,10 @@ def validate_target(url: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
 async def _request(row: ProviderConnection, method: str, suffix: str, payload: dict | None = None):
     url = f"{row.base_url.rstrip('/')}/{suffix.lstrip('/')}"
     parsed = urlsplit(url)
-    local_ollama = row.provider_type in {"ollama", "ollama_local"} and (
-        parsed.hostname or ""
-    ).lower() in _LOCAL_HOSTS
+    local_ollama = (
+        row.provider_type in {"ollama", "ollama_local"}
+        and (parsed.hostname or "").lower() in _LOCAL_HOSTS
+    )
     if local_ollama:
         ensure_loopback_policy(url)
     validated_ip = None if local_ollama else validate_target(url)
