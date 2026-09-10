@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@erik'
 created_date: '2026-09-10 06:16'
-updated_date: '2026-09-10 21:04'
+updated_date: '2026-09-10 21:16'
 labels: []
 dependencies: []
 references:
@@ -123,5 +123,11 @@ author: @atomic
 created: 2026-09-10 19:52
 ---
 Deployment evidence: health 200, private APIs 401, MCP controls visible, Shoo authenticated browser proof blocked at Google credential prompt. Release remains conditional.
+---
+
+author: @ShooCallbackJudge
+created: 2026-09-10 21:16
+---
+[judge] BLOCKING frontend/src/pages/LoginPage.tsx:58-64 — Race: on /auth/callback mount with a stale shoo_identity token in localStorage, the hook init effect (@shoojs/react dist/index.js: setIdentity(client.getIdentity())) surfaces the old token in the same commit in which effect 1 starts finishSignIn; effect 2 has no callback-awareness, so it immediately POSTs the STALE token to /api/auth/shoo/login concurrently with the in-flight callback exchange. Interleavings: stale 401 → catch's clearIdentity() can run after refreshIdentity() already read the fresh token, wiping it from localStorage and state so the new token is never submitted; callbackHandled.current (line 45) blocks auto-retry → user sees spurious "Sign-in could not be verified" and must repeat the full Shoo redirect. If the stale token is still valid, a duplicate server session and duplicate navigation are created. Fix: gate effect 2 on callback completion (in-flight flag set in effect 1, cleared after finishSignIn settles) so token submission happens only after the callback exchange, while preserving the no-callback silent re-login path (parseCallback() === null).
 ---
 <!-- COMMENTS:END -->
