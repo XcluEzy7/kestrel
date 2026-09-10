@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: In Progress
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 22:27'
+updated_date: '2026-09-10 23:22'
 labels: []
 dependencies:
   - KST-001
@@ -48,3 +48,12 @@ Validation found no Codex OAuth contract, no OLLAMA_API_KEY resolution, and prov
 
 Integrated security audit found high-severity unscoped integration_configs credential fallback; repair required before judge.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-09-10 23:22
+---
+[judge] FOLLOW-UPs (audit-consistent, non-blocking): (1) provider_connections.py:175 — NAT64 64:ff9b::/96 passes is_global gate (defense-in-depth; add explicit /96 rejection). (2) provider_connections.py:152-153 — empty api_key cannot clear stored key; document delete-as-removal or accept empty-string clear. (3) tests/test_provider_connections.py — no coverage for 2MiB response cap / timeout bounds. (4) Codex OAuth correctly absent (grep: no codex matches in src/) — AC8 met by not shipping.
+---
+<!-- COMMENTS:END -->
