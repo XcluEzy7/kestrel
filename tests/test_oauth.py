@@ -39,15 +39,6 @@ def _clear_pending_verifiers():
     _pending_verifiers.clear()
 
 
-@pytest.fixture(autouse=True)
-def _clear_runtime_key():
-    """Reset runtime API key between tests."""
-    import career_os.api.oauth as oauth_mod
-
-    original = oauth_mod._runtime_api_key
-    yield
-    oauth_mod._runtime_api_key = original
-
 
 # ---------------------------------------------------------------------------
 # PKCE crypto
@@ -132,7 +123,7 @@ class TestCallbackEndpoint:
         resp = db_client.get("/api/auth/openrouter/callback", params={"code": "test"})
         assert resp.status_code == 422
 
-    def test_successful_exchange(self, db_client):
+    def test_successful_exchange(self, db_client, db_session):
         """Mock a successful code-for-key exchange with OpenRouter."""
         _pending_verifiers["test-state"] = ("test-verifier", time.time())
 
@@ -162,10 +153,12 @@ class TestCallbackEndpoint:
         # Verifier should be consumed.
         assert "test-state" not in _pending_verifiers
 
-        # Key should be stored in module-level variable.
-        from career_os.api.oauth import _runtime_api_key
+        # Credentials are account-owned in the database, never process-global.
+        from career_os.services.integrations import get_integration
 
-        assert _runtime_api_key == "test-fake-openrouter-key"
+        integration = get_integration(db_session, "ai_providers")
+        assert integration is not None
+        assert integration.credentials_set["openrouter_api_key"] is True
 
     def test_exchange_http_error_returns_502(self, db_client):
         """OpenRouter returning a non-2xx should yield a 502."""
@@ -255,22 +248,25 @@ class TestStatusEndpoint:
     """Tests for the OAuth status endpoint."""
 
     def test_disconnected_when_no_key(self, db_client):
-        import career_os.api.oauth as oauth_mod
-
-        oauth_mod._runtime_api_key = ""
-        with patch("career_os.api.oauth.settings") as mock_settings:
-            mock_settings.openrouter_api_key = ""
-            resp = db_client.get("/api/auth/openrouter/status")
+        resp = db_client.get("/api/auth/openrouter/status")
 
         assert resp.status_code == 200
         data = resp.json()
         assert data["connected"] is False
         assert data["provider"] == "openrouter"
 
-    def test_connected_when_key_present(self, db_client):
-        import career_os.api.oauth as oauth_mod
+    def test_connected_when_key_present(self, db_client, db_session):
+        from career_os.schemas.integrations import IntegrationConfigUpdate
+        from career_os.services.integrations import update_integration
 
-        oauth_mod._runtime_api_key = "test-fake-openrouter-key-2"
+        update_integration(
+            db_session,
+            "ai_providers",
+            IntegrationConfigUpdate(
+                enabled=True,
+                credentials={"openrouter_api_key": "test-fake-openrouter-key-2"},
+            ),
+        )
         resp = db_client.get("/api/auth/openrouter/status")
 
         assert resp.status_code == 200

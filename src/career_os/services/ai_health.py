@@ -316,14 +316,16 @@ def _resolve_api_key(provider: str, stored_config: dict[str, str]) -> str:
     return os.getenv(env_key, "") if env_key else ""
 
 
-async def check_all_providers(db: Session | None = None) -> AIHealthResponse:
+async def check_all_providers(
+    db: Session | None = None, account: Account | None = None
+) -> AIHealthResponse:
     """Check health of all runtime-supported AI providers.
 
     Reads configuration from stored integration config (ai_providers),
     falling back to environment variables. Only reports providers
     that the runtime factory actually supports (mock, openrouter).
     """
-    stored_config = _get_stored_ai_config(db)
+    stored_config = _get_stored_ai_config(db, account)
     default_provider = _resolve_default_provider(stored_config)
 
     results: list[ProviderHealthStatus] = []
@@ -389,7 +391,9 @@ async def check_all_providers(db: Session | None = None) -> AIHealthResponse:
 
 
 async def check_single_provider(
-    provider_name: str, db: Session | None = None
+    provider_name: str,
+    db: Session | None = None,
+    account: Account | None = None,
 ) -> ProviderHealthStatus:
     """Check health of a single AI provider.
 
@@ -408,7 +412,7 @@ async def check_single_provider(
             ),
         )
 
-    stored_config = _get_stored_ai_config(db)
+    stored_config = _get_stored_ai_config(db, account)
 
     checkers = {
         "mock": lambda: _check_mock(),

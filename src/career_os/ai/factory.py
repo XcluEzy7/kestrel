@@ -25,17 +25,15 @@ from career_os.schemas.ai import AIFeature, AIResponse
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
     from career_os.models.auth import Account, ProviderConnection
 
 logger = logging.getLogger(__name__)
 
 
 def _build_ollama_provider() -> AIProvider:
-    """Build Ollama only when local loopback policy permits its base URL."""
-    from career_os.services.provider_connections import ensure_loopback_policy
-
+    """Build operator-selected local Ollama without hosted SSRF restrictions."""
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    ensure_loopback_policy(base_url)
     return OllamaProvider(base_url=base_url, model=os.getenv("OLLAMA_MODEL", "llama3.3"))
 
 
@@ -57,8 +55,8 @@ class AccountProvider(AIProvider):
         context: dict | None = None,
         **kwargs: object,
     ) -> AIResponse:
-        from career_os.services.provider_connections import complete
         from career_os.ai.openrouter_provider import _try_parse_structured
+        from career_os.services.provider_connections import complete
 
         result = await complete(self.connection, prompt)
         return AIResponse(
