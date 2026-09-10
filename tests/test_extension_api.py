@@ -330,6 +330,7 @@ class TestExtensionRoutes:
         )
         assert resp.status_code == 200
         assert resp.headers.get("access-control-allow-origin") == _CHROME_ORIGIN
+        assert "access-control-allow-credentials" not in resp.headers
 
     def test_capture_scores_through_scoring_service(self):
         """Re-scoped structural guard (was test_capture_does_not_import_score_job).

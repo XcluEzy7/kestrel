@@ -265,12 +265,18 @@ if settings.frontend_url.startswith(("http://localhost:", "http://127.0.0.1:")):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    # Additive: concrete chrome-extension:// origins for the browser extension
-    # (Phase 0 / G-1390). This never uses "*", so it does not widen the existing
-    # credentialed-wildcard risk on _cors_origins; the extension sends its token in
-    # a header (not cookies) so the credentialed frontend allowance is untouched.
-    allow_origin_regex=settings.extension_cors_regex,
     allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# Browser extensions use dedicated bearer tokens, never browser sessions. Keep
+# their broad ID matching in a separate non-credentialed CORS layer so an
+# installed extension cannot read cookie-authenticated responses.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],
+    allow_origin_regex=settings.extension_cors_regex,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
