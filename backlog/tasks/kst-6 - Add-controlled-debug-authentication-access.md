@@ -1,9 +1,11 @@
 ---
 id: KST-6
 title: Add controlled debug authentication access
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@Erik'
 created_date: '2026-09-11 00:50'
+updated_date: '2026-09-11 00:58'
 labels:
   - feature
   - security
@@ -26,3 +28,9 @@ Provide explicit opt-in access for frontend debugging through the deployed app w
 - [ ] #3 Debug account/profile ownership remains isolated from other accounts
 - [ ] #4 Tests cover disabled, invalid-secret, successful-login, and session-bound behavior
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add explicit DEBUG_AUTH_ENABLED and secret settings with fail-closed production defaults. 2. Add token-checked debug login endpoint that creates standard Account/AuthSession cookies and CSRF token for a dedicated stable debug identity. 3. Add frontend debug-login affordance and warning only when backend advertises debug mode. 4. Add focused API tests for disabled, invalid, successful, CSRF, and account isolation paths.
+<!-- SECTION:PLAN:END -->
