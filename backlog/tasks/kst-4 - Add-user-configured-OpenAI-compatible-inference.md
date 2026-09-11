@@ -1,10 +1,10 @@
 ---
 id: KST-4
 title: Add user-configured OpenAI-compatible inference
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:32'
+updated_date: '2026-09-11 05:00'
 labels: []
 dependencies:
   - KST-001
@@ -51,6 +51,8 @@ Integrated security audit found high-severity unscoped integration_configs crede
 Implementer: targeted provider/inference suite 240 passed, 9 skipped, 2 warnings. Audit: PASS, 0 blocking; 77 provider tests passed. Judge: PASS, 0 blocking. Combined gates: backend 4358 passed, 36 skipped; frontend 382 passed; build and lint passed. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider API 401. No authorized Shoo session, so live provider create/test or authenticated UI proof unavailable. Follow-ups remain non-blocking: NAT64 defense-in-depth, response/timeout coverage, empty-key clearing.
 
 Release boundary: authenticated live provider UI validation remains blocked at Shoo Google credential prompt; no provider save/test claim made. Code/test gates and anonymous auth boundary are verified.
+
+Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446bd SUCCESS; /health 200 with database connected; anonymous provider API 401. Browser reached Kestrel login and Shoo Google sign-in boundary; no authorized Google credentials, so authenticated provider UI proof remains unavailable.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -61,3 +63,9 @@ created: 2026-09-10 23:22
 [judge] FOLLOW-UPs (audit-consistent, non-blocking): (1) provider_connections.py:175 — NAT64 64:ff9b::/96 passes is_global gate (defense-in-depth; add explicit /96 rejection). (2) provider_connections.py:152-153 — empty api_key cannot clear stored key; document delete-as-removal or accept empty-string clear. (3) tests/test_provider_connections.py — no coverage for 2MiB response cap / timeout bounds. (4) Codex OAuth correctly absent (grep: no codex matches in src/) — AC8 met by not shipping.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented account-scoped OpenAI-compatible provider configuration, model discovery, secure credential handling, and isolation. Verified by focused/full code gates, audit and judge PASS, Railway deployment SUCCESS, live health 200, and anonymous provider auth 401. Authenticated provider UI proof stops at Shoo Google sign-in without authorized credentials.
+<!-- SECTION:FINAL_SUMMARY:END -->
