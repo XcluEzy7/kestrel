@@ -1,10 +1,10 @@
 ---
 id: KST-5
 title: Add authenticated MCP server
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-10 23:32'
+updated_date: '2026-09-11 05:00'
 labels: []
 dependencies:
   - KST-001
@@ -40,6 +40,8 @@ Independent MCP security audit passed: token verification, account/profile owner
 Implementer: tests/test_mcp_server.py 20 passed, test_shoo_auth.py 8 passed, test_kst001_account_scoping.py 2 passed, test_extension_auth_ownership.py 3 passed, tools/tests/test_kestrel_mcp.py 20 passed. Audit: PASS, 0 blocking; judge: PASS, 0 blocking. Deployment c714099e-ee44-470c-8b7b-63ccf76aab14 SUCCESS; health 200 database connected; anonymous provider/MCP-token APIs and POST /mcp/ return 401. Google browser flow reached credential prompt; authenticated token lifecycle and MCP tool proof unavailable. Non-blocking follow-ups: stored URL scheme validation, token mint rate/cap, CSV status validation, wildcard escaping, CSP.
 
 Release boundary: authenticated MCP token create/list/revoke and tool-call browser proof remains blocked at Shoo Google credential prompt; no authenticated lifecycle claim made. Anonymous /mcp/ rejection and code/test gates are verified.
+
+Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446bd SUCCESS; /health 200 with database connected; anonymous provider, MCP-token, and /mcp/ requests 401. Browser reached Kestrel login and Shoo Google sign-in boundary; no authorized Google credentials, so authenticated MCP token lifecycle/tool proof remains unavailable.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -50,3 +52,9 @@ created: 2026-09-10 23:22
 [judge] PASS @ 92ac826. Verifier ownership/scopes/redaction/confirm/audit verified independently (mcp_server.py:105-164,185-219). FOLLOW-UPs: (1) mcp_server.py:348,363 — contact linkedin_url lacks http/https scheme check unlike create_application:1075 (stored self-XSS on click); (2) mcp_server.py:525-570 + csv_import.py:155-163 — CSV import writes raw status without is_valid_transition; (3) shoo_auth.py:155-181 — no rate limit/cap on token minting; (4) mcp_server.py:262-293,707-735 — ilike search wildcard injection (own-account scope only); (5) main.py — no CSP/security headers (defense-in-depth). None crosses account boundary.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented authenticated Streamable HTTP MCP with account/profile binding, scopes, redaction, confirmations, audit records, and isolation. Verified by focused/full code gates, audit and judge PASS, Railway deployment SUCCESS, live health 200, and anonymous MCP auth rejection. Authenticated token/tool proof stops at Shoo Google sign-in without authorized credentials.
+<!-- SECTION:FINAL_SUMMARY:END -->
