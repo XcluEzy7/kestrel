@@ -96,6 +96,14 @@ def test_session_route_matrix_and_csrf(db_session: Session, monkeypatch):
     assert allowed.status_code == 201
 
 
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_api_documentation_requires_shoo_auth(db_session: Session, monkeypatch, path: str):
+    """Documentation routes are private whenever Shoo auth is enabled."""
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    client = TestClient(app, base_url="https://testserver")
+    assert client.get(path).status_code == 401
+
+
 def test_two_accounts_cannot_read_or_write_each_others_records(db_session: Session, monkeypatch):
     """Authenticated account cannot select foreign profile for reads or writes."""
     monkeypatch.setattr(settings, "shoo_auth_enabled", True)

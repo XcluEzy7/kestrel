@@ -6,7 +6,8 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from career_os import __version__
@@ -196,11 +197,36 @@ app = FastAPI(
     title=settings.app_name,
     description="AI-Powered Job Search & Career Strategy Platform",
     version=__version__,
-    docs_url=None if settings.shoo_auth_enabled else "/docs",
-    redoc_url=None if settings.shoo_auth_enabled else "/redoc",
-    openapi_url=None if settings.shoo_auth_enabled else "/openapi.json",
+    # Register below so documentation auth follows runtime settings in tests
+    # and long-lived processes, rather than being fixed at import time.
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
     lifespan=lifespan,
 )
+
+
+@app.get("/docs", include_in_schema=False, dependencies=[Depends(authorize_private_request)])
+async def swagger_docs() -> HTMLResponse:
+    """Serve Swagger UI only after the private-request auth gate."""
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json", title=f"{settings.app_name} - Swagger UI"
+    )
+
+
+@app.get("/redoc", include_in_schema=False, dependencies=[Depends(authorize_private_request)])
+async def redoc_docs() -> HTMLResponse:
+    """Serve ReDoc only after the private-request auth gate."""
+    return get_redoc_html(openapi_url="/openapi.json", title=f"{settings.app_name} - ReDoc")
+
+
+@app.get(
+    "/openapi.json", include_in_schema=False, dependencies=[Depends(authorize_private_request)]
+)
+async def openapi_schema() -> JSONResponse:
+    """Serve OpenAPI schema only after the private-request auth gate."""
+    return JSONResponse(app.openapi())
+
 
 # Hosted remote MCP endpoint. Token verifier resolves account/profile ownership
 # from hashed database records; no caller-supplied profile ID reaches tools.
