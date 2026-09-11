@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-11 05:06'
+updated_date: '2026-09-11 05:07'
 labels: []
 dependencies:
   - KST-001
@@ -57,6 +57,8 @@ Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446b
 Focused verification 2026-09-11: provider, inference, MCP, Shoo auth, account isolation, extension ownership, and MCP client tests passed: 152 passed, 2 warnings. Live provider UI remains unverified without authorized Shoo session.
 
 Security acceptance review: focused provider and auth suite passed 152 tests. Verified account ownership, encrypted keys, SSRF target validation, redirect rejection, bounded requests, model discovery, explicit model precedence, and safe provider errors. Non-blocking follow-ups remain NAT64 defense-in-depth, response/timeout coverage, and empty-key clearing.
+
+Finalization evidence: AC6, AC8, and AC9 objectively supported by focused 152-test provider/auth/MCP run, prior full backend/frontend/build/lint gates, encrypted-key assertions, and documented absence of supported Codex OAuth contract. AC1-5 and AC7 remain unchecked because authenticated provider save/test UI proof and complete hosted SSRF response/timeout evidence are unavailable.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -71,5 +73,5 @@ created: 2026-09-10 23:22
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented account-scoped OpenAI-compatible provider configuration, model discovery, secure credential handling, and isolation. Verified by focused/full code gates, audit and judge PASS, Railway deployment SUCCESS, live health 200, and anonymous provider auth 401. Authenticated provider UI proof stops at Shoo Google sign-in without authorized credentials.
+Delivered account-scoped OpenAI-compatible provider configuration and discovery. Objectively verified AC6, AC8, AC9 through focused tests and prior full gates. Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446bd is healthy; authenticated provider UI proof remains blocked at Shoo Google sign-in without authorized credentials.
 <!-- SECTION:FINAL_SUMMARY:END -->
