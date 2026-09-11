@@ -1,4 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   Kanban,
@@ -12,6 +13,8 @@ import {
   Activity,
   Users,
   HelpCircle,
+  Menu,
+  X,
 } from "lucide-react";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { TourProvider } from "@/components/TourProvider";
@@ -32,16 +35,33 @@ const navItems = [
 
 export function Layout() {
   const location = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="border-b bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-gray-900">Kestrel</span>
             </div>
-            <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 md:hidden"
+              aria-expanded={isMenuOpen}
+              aria-controls="primary-navigation"
+              aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              onClick={() => setIsMenuOpen((open) => !open)}
+            >
+              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+            <div
+              id="primary-navigation"
+              className={cn(
+                "absolute inset-x-0 top-16 z-10 border-b bg-white px-4 py-2 shadow-sm md:static md:flex md:items-center md:gap-1 md:border-0 md:p-0 md:shadow-none",
+                isMenuOpen ? "block" : "hidden md:flex",
+              )}
+            >
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive =
@@ -59,6 +79,7 @@ export function Layout() {
                         ? "bg-gray-100 text-gray-900"
                         : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
                     )}
+                    onClick={() => setIsMenuOpen(false)}
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}

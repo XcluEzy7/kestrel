@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { Layout } from "@/components/Layout";
 import { renderWithProviders } from "@/test-utils";
@@ -52,5 +52,25 @@ describe("Layout", () => {
     renderWithRouter(["/"]);
     const pipelineLink = screen.getByText("Pipeline").closest("a");
     expect(pipelineLink).toHaveClass("bg-gray-100");
+  });
+
+  it("toggles accessible mobile navigation and closes after navigation", () => {
+    renderWithRouter();
+    const toggle = screen.getByRole("button", { name: "Open navigation menu" });
+    const navigation = screen.getByRole("navigation").querySelector("#primary-navigation");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(navigation).toHaveClass("hidden");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Close navigation menu" })).toBeInTheDocument();
+    expect(navigation).toHaveClass("block");
+
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+    expect(screen.getByRole("button", { name: "Open navigation menu" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
 });
