@@ -4,7 +4,7 @@ title: Add authenticated MCP server
 status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-11 05:05'
+updated_date: '2026-09-11 05:06'
 labels: []
 dependencies:
   - KST-001
@@ -44,6 +44,8 @@ Release boundary: authenticated MCP token create/list/revoke and tool-call brows
 Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446bd SUCCESS; /health 200 with database connected; anonymous provider, MCP-token, and /mcp/ requests 401. Browser reached Kestrel login and Shoo Google sign-in boundary; no authorized Google credentials, so authenticated MCP token lifecycle/tool proof remains unavailable.
 
 Focused verification 2026-09-11: provider, inference, MCP, Shoo auth, account isolation, extension ownership, and MCP client tests passed: 152 passed, 2 warnings. Live MCP token lifecycle/tool calls remain unverified without authorized Shoo session.
+
+Security acceptance review: focused MCP and auth suite passed 152 tests. Verified token hash lookup, expiry/revocation, account/profile binding, read/write scopes, secret redaction, confirmation gates, audit records, and caller ownership exclusion. Non-blocking follow-ups remain URL scheme validation, token mint rate/cap, CSV transition validation, wildcard escaping, and CSP.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
