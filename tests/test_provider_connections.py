@@ -5,18 +5,23 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from career_os.models.auth import Account
+from career_os.config import settings
+from career_os.main import app
+from career_os.models.auth import Account, ProviderConnection
 from career_os.schemas.provider_connections import (
     ProviderConnectionCreate,
-    ProviderDiscoveryRequest,
     ProviderConnectionUpdate,
+    ProviderDiscoveryRequest,
+    ProviderModelsResponse,
 )
+from career_os.services.auth import create_session
 from career_os.services.provider_connections import (
     _request,
-    create_connection,
     complete,
+    create_connection,
     discover_draft_models,
     ensure_loopback_policy,
     normalize_base_url,
@@ -44,6 +49,15 @@ def _account(db: Session, subject: str) -> Account:
     db.commit()
     db.refresh(account)
     return account
+
+
+def _session_client(db: Session, account: Account) -> TestClient:
+    token, csrf, _ = create_session(db, account)
+    client = TestClient(app, base_url="https://testserver")
+    client.cookies.set(settings.session_cookie_name, token)
+    client.cookies.set("kestrel_csrf", csrf)
+    client.headers.update({"X-CSRF-Token": csrf})
+    return client
 
 
 def test_normalize_base_url_adds_v1_and_rejects_url_credentials():
@@ -135,6 +149,54 @@ def test_factory_selects_enabled_connection_for_account(db_session: Session):
     assert provider.connection.model == "account-model"
 
 
+def test_create_endpoint_discovers_and_persists_omitted_model(db_session: Session, monkeypatch):
+    """Omitted model is discovered before the connection is returned."""
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    owner = _account(db_session, "provider-endpoint-owner")
+    client = _session_client(db_session, owner)
+
+    with patch(
+        "career_os.api.provider_connections.discover_models",
+        new=AsyncMock(return_value=ProviderModelsResponse(models=["discovered-model"])),
+    ) as discover:
+        response = client.post(
+            "/api/provider-connections",
+            json={
+                "display_name": "Endpoint provider",
+                "base_url": "https://provider.example/v1",
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["model"] == "discovered-model"
+    discover.assert_awaited_once()
+    assert db_session.query(ProviderConnection).one().model == "discovered-model"
+
+
+def test_create_endpoint_rolls_back_connection_when_discovery_fails(
+    db_session: Session, monkeypatch
+):
+    """Failed discovery does not leave an unusable saved connection behind."""
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    owner = _account(db_session, "provider-endpoint-failure")
+    client = _session_client(db_session, owner)
+
+    with patch(
+        "career_os.api.provider_connections.discover_models",
+        new=AsyncMock(side_effect=ValueError("No usable provider model found")),
+    ):
+        response = client.post(
+            "/api/provider-connections",
+            json={
+                "display_name": "Unavailable provider",
+                "base_url": "https://provider.example/v1",
+            },
+        )
+
+    assert response.status_code == 502
+    assert db_session.query(ProviderConnection).count() == 0
+
+
 @pytest.mark.asyncio
 async def test_draft_discovery_uses_normalized_target_and_encrypted_key():
     payload = ProviderDiscoveryRequest(
@@ -156,17 +218,26 @@ async def test_completion_discovers_default_but_explicit_model_wins():
     from career_os.models.auth import ProviderConnection
 
     row = ProviderConnection(
-        id=1, account_id=1, display_name="Test", provider_type="openai_compatible",
-        base_url="https://provider.example/v1", model=None, enabled=True,
-        created_at=datetime.now(UTC), updated_at=datetime.now(UTC), api_key_encrypted=None,
+        id=1,
+        account_id=1,
+        display_name="Test",
+        provider_type="openai_compatible",
+        base_url="https://provider.example/v1",
+        model=None,
+        enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        api_key_encrypted=None,
     )
     with patch(
         "career_os.services.provider_connections._request",
-        new=AsyncMock(side_effect=[
-            {"data": [{"id": "discovered-model"}]},
-            {"choices": [{"message": {"content": "ok"}}]},
-            {"choices": [{"message": {"content": "override"}}], "model": "override-model"},
-        ]),
+        new=AsyncMock(
+            side_effect=[
+                {"data": [{"id": "discovered-model"}]},
+                {"choices": [{"message": {"content": "ok"}}]},
+                {"choices": [{"message": {"content": "override"}}], "model": "override-model"},
+            ]
+        ),
     ) as request:
         discovered = await complete(row, "hello")
         explicit = await complete(row, "hello", "override-model")
@@ -181,9 +252,16 @@ async def test_completion_rejects_empty_discovery():
     from career_os.models.auth import ProviderConnection
 
     row = ProviderConnection(
-        id=1, account_id=1, display_name="Test", provider_type="ollama_local",
-        base_url="http://localhost:11434/v1", model=None, enabled=True,
-        created_at=datetime.now(UTC), updated_at=datetime.now(UTC), api_key_encrypted=None,
+        id=1,
+        account_id=1,
+        display_name="Test",
+        provider_type="ollama_local",
+        base_url="http://localhost:11434/v1",
+        model=None,
+        enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+        api_key_encrypted=None,
     )
     with patch(
         "career_os.services.provider_connections._request",
