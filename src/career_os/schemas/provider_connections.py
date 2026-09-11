@@ -10,7 +10,7 @@ class ProviderConnectionCreate(BaseModel):
     provider_type: str = Field(default="openai_compatible", min_length=1, max_length=32)
     base_url: str = Field(min_length=1, max_length=2048)
     api_key: str | None = Field(default=None, max_length=4096)
-    model: str = Field(min_length=1, max_length=255)
+    model: str | None = Field(default=None, max_length=255)
     enabled: bool = True
 
 
@@ -19,7 +19,7 @@ class ProviderConnectionUpdate(BaseModel):
     provider_type: str | None = Field(default=None, min_length=1, max_length=32)
     base_url: str | None = Field(default=None, max_length=2048)
     api_key: str | None = Field(default=None, max_length=4096)
-    model: str | None = Field(default=None, min_length=1, max_length=255)
+    model: str | None = Field(default=None, max_length=255)
     enabled: bool | None = None
 
 
@@ -28,7 +28,7 @@ class ProviderConnectionResponse(BaseModel):
     display_name: str
     provider_type: str
     base_url: str
-    model: str
+    model: str | None
     enabled: bool
     api_key_configured: bool
     created_at: datetime
@@ -41,6 +41,14 @@ class ProviderConnectionListResponse(BaseModel):
 
 class ProviderModelsResponse(BaseModel):
     models: list[str]
+
+
+class ProviderDiscoveryRequest(BaseModel):
+    """Credentials and target for discovering models before saving a connection."""
+
+    provider_type: str = Field(default="openai_compatible", min_length=1, max_length=32)
+    base_url: str = Field(min_length=1, max_length=2048)
+    api_key: str | None = Field(default=None, max_length=4096)
 
 
 class ProviderTestResponse(BaseModel):

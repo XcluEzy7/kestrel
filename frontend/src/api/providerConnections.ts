@@ -5,7 +5,7 @@ export interface ProviderConnection {
   display_name: string;
   provider_type: string;
   base_url: string;
-  model: string;
+  model: string | null;
   enabled: boolean;
   api_key_configured: boolean;
   created_at: string;
@@ -17,7 +17,7 @@ export interface ProviderConnectionInput {
   provider_type: string;
   base_url: string;
   api_key?: string;
-  model: string;
+  model?: string;
   enabled?: boolean;
 }
 
@@ -57,4 +57,10 @@ export async function testProviderConnection(id: number) {
 
 export async function discoverProviderModels(id: number) {
   return parse<{ models: string[] }>(await apiFetch(`${endpoint}/${id}/models`));
+}
+
+export async function discoverDraftProviderModels(data: Omit<ProviderConnectionInput, "display_name" | "model" | "enabled">) {
+  return parse<{ models: string[] }>(await apiFetch(`${endpoint}/models/discover`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  }));
 }

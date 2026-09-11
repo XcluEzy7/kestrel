@@ -118,9 +118,8 @@ def test_two_accounts_cannot_read_or_write_each_others_records(db_session: Sessi
     db_session.refresh(app_a)
     assert app_a.notes is None
 
-def test_hostile_origin_cannot_read_credentialed_private_response(
-    db_session: Session, monkeypatch
-):
+
+def test_hostile_origin_cannot_read_credentialed_private_response(db_session: Session, monkeypatch):
     """Credentialed private GETs never expose data to an untrusted origin."""
     monkeypatch.setattr(settings, "shoo_auth_enabled", True)
     _, profile, token, csrf = _account(db_session, "ps_cors", 25)
@@ -134,7 +133,10 @@ def test_hostile_origin_cannot_read_credentialed_private_response(
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers
 
-@pytest.mark.parametrize("content_type", ["application/merge-patch+json", "Application/JSON; charset=utf-8"])
+
+@pytest.mark.parametrize(
+    "content_type", ["application/merge-patch+json", "Application/JSON; charset=utf-8"]
+)
 def test_foreign_profile_body_rejected_for_all_json_media_types(
     db_session: Session, monkeypatch, content_type: str
 ):
@@ -147,9 +149,7 @@ def test_foreign_profile_body_rejected_for_all_json_media_types(
     response = owner.post(
         "/api/applications",
         headers={"X-CSRF-Token": csrf_a, "Content-Type": content_type},
-        content=(
-            f'{{"profile_id": {profile_b.id}, "company": "Foreign", "role": "Write"}}'
-        ),
+        content=(f'{{"profile_id": {profile_b.id}, "company": "Foreign", "role": "Write"}}'),
     )
 
     assert response.status_code == 404
@@ -199,3 +199,76 @@ def test_legacy_data_not_claimed_without_operator_opt_in(db_session: Session, mo
     assert legacy.account_id is None
     assert len(account.profiles) == 1
     assert account.profiles[0].id != legacy.id
+
+
+def test_debug_login_is_disabled_by_default(db_session: Session, monkeypatch):
+    """Debug login is unavailable unless explicitly enabled."""
+    monkeypatch.setattr(settings, "debug_auth_enabled", False)
+    monkeypatch.setattr(settings, "debug_auth_secret", "debug-secret")
+    response = TestClient(app, base_url="https://testserver").post(
+        "/api/auth/debug", json={"secret": "debug-secret"}
+    )
+    assert response.status_code == 404
+    assert db_session.query(Account).count() == 0
+
+    state = TestClient(app, base_url="https://testserver").get("/api/auth/shoo/me")
+    assert state.json()["debug_auth_enabled"] is False
+
+
+def test_debug_login_rejects_invalid_secret_without_revealing_configuration(
+    db_session: Session, monkeypatch
+):
+    """Enabled debug login still requires exact secret."""
+    monkeypatch.setattr(settings, "debug_auth_enabled", True)
+    monkeypatch.setattr(settings, "debug_auth_secret", "debug-secret")
+    response = TestClient(app, base_url="https://testserver").post(
+        "/api/auth/debug", json={"secret": "wrong"}
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid debug secret"
+    assert db_session.query(Account).count() == 0
+
+
+def test_debug_login_creates_isolated_session_and_csrf_protected_account(
+    db_session: Session, monkeypatch
+):
+    """Successful debug login uses normal cookies and cannot claim legacy data."""
+    legacy = Profile(id=51, name="Legacy")
+    normal, normal_profile, _, _ = _account(db_session, "ps_normal", 52)
+    db_session.add(legacy)
+    db_session.commit()
+    monkeypatch.setattr(settings, "debug_auth_enabled", True)
+    monkeypatch.setattr(settings, "debug_auth_secret", "debug-secret")
+    monkeypatch.setattr(settings, "shoo_auth_enabled", True)
+    client = TestClient(app, base_url="https://testserver")
+
+    state = client.get("/api/auth/shoo/me")
+    assert state.json()["debug_auth_enabled"] is True
+
+    response = client.post("/api/auth/debug", json={"secret": "debug-secret"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["authenticated"] is True
+    assert body["debug"] is True
+    assert body["profile_id"] != legacy.id
+    assert "HttpOnly" in response.headers.get_list("set-cookie")[0]
+    assert client.cookies.get("kestrel_csrf")
+
+    debug = db_session.query(Account).filter(Account.pairwise_sub == "debug:kst-6").one()
+    assert debug.id != normal.id
+    assert debug.profiles[0].id == body["profile_id"]
+    db_session.refresh(legacy)
+    assert legacy.account_id is None
+
+    blocked = client.post(
+        "/api/applications", json={"profile_id": body["profile_id"], "company": "A", "role": "R"}
+    )
+    assert blocked.status_code == 403
+    allowed = client.post(
+        "/api/applications",
+        headers={"X-CSRF-Token": client.cookies.get("kestrel_csrf")},
+        json={"profile_id": body["profile_id"], "company": "A", "role": "R"},
+    )
+    assert allowed.status_code == 201
+    foreign = client.get(f"/api/applications?profile_id={normal_profile.id}")
+    assert foreign.status_code == 404

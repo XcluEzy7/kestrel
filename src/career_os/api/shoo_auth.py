@@ -62,6 +62,20 @@ class MCPTokenCreatedResponse(MCPTokenResponse):
     token: str
 
 
+def set_session_cookies(response: Response, token: str, csrf: str) -> None:
+    """Set browser session and readable CSRF cookies for any login flow."""
+    response.set_cookie(settings.session_cookie_name, token, **session_cookie_kwargs())
+    response.set_cookie(
+        "kestrel_csrf",
+        csrf,
+        httponly=False,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        max_age=settings.session_ttl_seconds,
+        path="/",
+    )
+
+
 @router.post("/login")
 def login(
     payload: ShooLoginRequest,
@@ -75,16 +89,7 @@ def login(
         raise HTTPException(status_code=401, detail="Invalid Shoo identity token") from exc
     account = account_for_claims(db, claims)
     token, csrf, _ = create_session(db, account)
-    response.set_cookie(settings.session_cookie_name, token, **session_cookie_kwargs())
-    response.set_cookie(
-        "kestrel_csrf",
-        csrf,
-        httponly=False,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        max_age=settings.session_ttl_seconds,
-        path="/",
-    )
+    set_session_cookies(response, token, csrf)
     try:
         profile_id = default_profile(account).id
     except RuntimeError as exc:
@@ -117,14 +122,24 @@ def logout(request: Request, response: Response, db: Annotated[Session, Depends(
 @router.get("/me")
 def me(request: Request, db: Annotated[Session, Depends(get_db)]) -> dict:
     """Return auth state and server-authoritative default profile."""
+    debug_available = settings.debug_auth_enabled and bool(settings.debug_auth_secret)
     session = get_session(db, request.cookies.get(settings.session_cookie_name))
     if session is None:
-        return {"authenticated": False, "auth_required": settings.shoo_auth_enabled}
+        return {
+            "authenticated": False,
+            "auth_required": settings.shoo_auth_enabled,
+            "debug_auth_enabled": debug_available,
+        }
     try:
         profile_id = default_profile(session.account).id
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail="Authenticated account has no profile") from exc
-    return {"authenticated": True, "profile_id": profile_id, "auth_required": True}
+    return {
+        "authenticated": True,
+        "profile_id": profile_id,
+        "auth_required": True,
+        "debug_auth_enabled": debug_available,
+    }
 
 
 def _token_response(token: MCPToken, secret: str | None = None) -> dict:

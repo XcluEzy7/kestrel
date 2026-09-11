@@ -18,6 +18,7 @@ from career_os.api.calendar import router as calendar_router
 from career_os.api.coaching import router as coaching_router
 from career_os.api.contacts import router as contacts_router
 from career_os.api.discovery import router as discovery_router
+from career_os.api.debug_auth import router as debug_auth_router
 from career_os.api.extension import router as extension_router
 from career_os.api.follow_ups import router as follow_ups_router
 from career_os.api.gaps import router as gaps_router
@@ -297,6 +298,7 @@ app.include_router(applications_router, dependencies=_private_dependencies)
 app.include_router(coaching_router, dependencies=_private_dependencies)
 app.include_router(contacts_router, dependencies=_private_dependencies)
 app.include_router(discovery_router, dependencies=_private_dependencies)
+app.include_router(debug_auth_router)
 app.include_router(extension_router)
 app.include_router(follow_ups_router, dependencies=_private_dependencies)
 app.include_router(gaps_router, dependencies=_private_dependencies)

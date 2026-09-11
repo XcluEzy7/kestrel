@@ -18,6 +18,7 @@ from career_os.schemas.provider_connections import (
     ProviderConnectionCreate,
     ProviderConnectionResponse,
     ProviderConnectionUpdate,
+    ProviderDiscoveryRequest,
     ProviderModelsResponse,
     ProviderTestResponse,
 )
@@ -128,7 +129,7 @@ def create_connection(db: Session, account: Account, payload: ProviderConnection
         provider_type=payload.provider_type.strip().lower(),
         base_url=normalize_base_url(payload.base_url),
         api_key_encrypted=_encrypt(payload.api_key),
-        model=payload.model.strip(),
+        model=payload.model.strip() if payload.model else None,
         enabled=payload.enabled,
     )
     db.add(row)
@@ -146,7 +147,7 @@ def update_connection(db: Session, row: ProviderConnection, payload: ProviderCon
     if "base_url" in values:
         row.base_url = normalize_base_url(values["base_url"])
     if "model" in values:
-        row.model = values["model"].strip()
+        row.model = values["model"].strip() if values["model"] else None
     if "enabled" in values:
         row.enabled = values["enabled"]
     if "api_key" in values and values["api_key"]:
@@ -231,6 +232,18 @@ async def discover_models(row: ProviderConnection) -> ProviderModelsResponse:
     return ProviderModelsResponse(models=models)
 
 
+async def discover_draft_models(payload: ProviderDiscoveryRequest) -> ProviderModelsResponse:
+    """Discover models with draft credentials without persisting a connection."""
+    row = ProviderConnection(
+        provider_type=payload.provider_type.strip().lower(),
+        base_url=normalize_base_url(payload.base_url),
+        api_key_encrypted=_encrypt(payload.api_key),
+        model=None,
+        enabled=True,
+    )
+    return await discover_models(row)
+
+
 async def test_connection(row: ProviderConnection) -> ProviderTestResponse:
     try:
         discovered = await discover_models(row)
@@ -247,11 +260,17 @@ async def complete(
 ) -> ProviderCompletionResponse:
     if not row.enabled:
         raise ValueError("Provider connection is disabled")
+    selected_model = (model or row.model or "").strip()
+    if not selected_model:
+        discovered = await discover_models(row)
+        selected_model = next((item.strip() for item in discovered.models if item.strip()), "")
+    if not selected_model:
+        raise ValueError("No usable provider model found")
     data = await _request(
         row,
         "POST",
         "chat/completions",
-        {"model": model or row.model, "messages": [{"role": "user", "content": prompt}]},
+        {"model": selected_model, "messages": [{"role": "user", "content": prompt}]},
     )
     content = data["choices"][0]["message"]["content"]
-    return ProviderCompletionResponse(content=content, model=data.get("model", model or row.model))
+    return ProviderCompletionResponse(content=content, model=data.get("model", selected_model))

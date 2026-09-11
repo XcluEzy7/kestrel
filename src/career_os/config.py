@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = True
     # Explicit one-time operator opt-in for assigning pre-auth profiles on first login.
     shoo_claim_legacy_data: bool = False
+    # Debug browser authentication is never available unless explicitly enabled
+    # with a non-empty shared secret. It always uses a dedicated account.
+    debug_auth_enabled: bool = False
+    debug_auth_secret: str = ""
 
     # Data directory
     data_dir: Path = Path("data")

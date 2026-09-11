@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session
 from career_os.models.auth import Account
 from career_os.schemas.provider_connections import (
     ProviderConnectionCreate,
+    ProviderDiscoveryRequest,
     ProviderConnectionUpdate,
 )
 from career_os.services.provider_connections import (
     _request,
     create_connection,
+    complete,
+    discover_draft_models,
     ensure_loopback_policy,
     normalize_base_url,
     validate_target,
@@ -130,6 +133,64 @@ def test_factory_selects_enabled_connection_for_account(db_session: Session):
     provider = get_ai_provider(db=db_session, account=owner)
     assert isinstance(provider, AccountProvider)
     assert provider.connection.model == "account-model"
+
+
+@pytest.mark.asyncio
+async def test_draft_discovery_uses_normalized_target_and_encrypted_key():
+    payload = ProviderDiscoveryRequest(
+        provider_type="ollama_cloud", base_url="https://ollama.com", api_key="draft-secret"
+    )
+    with patch(
+        "career_os.services.provider_connections._request",
+        new=AsyncMock(return_value={"data": [{"id": "cloud-model"}]}),
+    ) as request:
+        result = await discover_draft_models(payload)
+    assert result.models == ["cloud-model"]
+    row = request.call_args.args[0]
+    assert row.base_url == "https://ollama.com/v1"
+    assert row.api_key_encrypted != "draft-secret"
+
+
+@pytest.mark.asyncio
+async def test_completion_discovers_default_but_explicit_model_wins():
+    from career_os.models.auth import ProviderConnection
+
+    row = ProviderConnection(
+        id=1, account_id=1, display_name="Test", provider_type="openai_compatible",
+        base_url="https://provider.example/v1", model=None, enabled=True,
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC), api_key_encrypted=None,
+    )
+    with patch(
+        "career_os.services.provider_connections._request",
+        new=AsyncMock(side_effect=[
+            {"data": [{"id": "discovered-model"}]},
+            {"choices": [{"message": {"content": "ok"}}]},
+            {"choices": [{"message": {"content": "override"}}], "model": "override-model"},
+        ]),
+    ) as request:
+        discovered = await complete(row, "hello")
+        explicit = await complete(row, "hello", "override-model")
+    assert discovered.model == "discovered-model"
+    assert explicit.model == "override-model"
+    assert request.call_args_list[1].args[3]["model"] == "discovered-model"
+    assert request.call_args_list[2].args[3]["model"] == "override-model"
+
+
+@pytest.mark.asyncio
+async def test_completion_rejects_empty_discovery():
+    from career_os.models.auth import ProviderConnection
+
+    row = ProviderConnection(
+        id=1, account_id=1, display_name="Test", provider_type="ollama_local",
+        base_url="http://localhost:11434/v1", model=None, enabled=True,
+        created_at=datetime.now(UTC), updated_at=datetime.now(UTC), api_key_encrypted=None,
+    )
+    with patch(
+        "career_os.services.provider_connections._request",
+        new=AsyncMock(return_value={"data": []}),
+    ):
+        with pytest.raises(ValueError, match="usable provider model"):
+            await complete(row, "hello")
 
 
 @pytest.mark.asyncio

@@ -3,8 +3,8 @@
 import { apiFetch } from "./client";
 
 export type AuthState =
-  | { authenticated: false; auth_required?: boolean }
-  | { authenticated: true; profile_id: number; auth_required?: boolean };
+  | { authenticated: false; auth_required?: boolean; debug_auth_enabled?: boolean }
+  | { authenticated: true; profile_id: number; auth_required?: boolean; debug_auth_enabled?: boolean };
 
 export interface McpTokenResponse {
   id: number;
@@ -40,6 +40,22 @@ export async function loginWithShoo(idToken: string): Promise<AuthState> {
     body: JSON.stringify({ id_token: idToken }),
   });
   if (!response.ok) throw new Error("Shoo sign-in failed");
+  return response.json() as Promise<AuthState>;
+}
+
+export async function loginWithDebug(secret: string): Promise<AuthState> {
+  const response = await apiFetch("/api/auth/debug", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret }),
+  });
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    const detail =
+      body !== null && typeof body === "object" && "detail" in body &&
+      typeof body.detail === "string" ? body.detail : undefined;
+    throw new Error(detail ?? "Debug sign-in failed");
+  }
   return response.json() as Promise<AuthState>;
 }
 

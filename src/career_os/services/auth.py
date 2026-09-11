@@ -104,8 +104,14 @@ def csrf_valid(session: AuthSession, value: str | None) -> bool:
     return bool(value) and secrets.compare_digest(session.csrf_hash, _hash(value))
 
 
-def account_for_claims(db: Session, claims: dict) -> Account:
-    """Find/create account and optionally claim unowned legacy profiles."""
+def account_for_claims(
+    db: Session, claims: dict, *, claim_legacy: bool | None = None
+) -> Account:
+    """Find/create account and optionally claim unowned legacy profiles.
+
+    ``claim_legacy`` defaults to the operator setting. Callers creating
+    synthetic identities must pass ``False`` so they cannot claim legacy data.
+    """
     pairwise_sub = claims["pairwise_sub"]
     account = db.query(Account).filter(Account.pairwise_sub == pairwise_sub).first()
     if account is not None:
@@ -115,7 +121,7 @@ def account_for_claims(db: Session, claims: dict) -> Account:
     db.add(account)
     db.flush()
     legacy_profiles = db.query(Profile).filter(Profile.account_id.is_(None)).all()
-    if settings.shoo_claim_legacy_data and legacy_profiles:
+    if (settings.shoo_claim_legacy_data if claim_legacy is None else claim_legacy) and legacy_profiles:
         for profile in legacy_profiles:
             profile.account_id = account.id
     else:

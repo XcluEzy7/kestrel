@@ -7,12 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginPage } from "@/pages/LoginPage";
 import { renderWithProviders } from "@/test-utils";
 
-const { mockAuthClient, mockLoginWithShoo } = vi.hoisted(() => ({
+const { mockAuthClient, mockFetchAuthState, mockLoginWithDebug, mockLoginWithShoo } = vi.hoisted(() => ({
   mockAuthClient: {
     parseCallback: vi.fn(),
     finishSignIn: vi.fn(),
   },
   mockLoginWithShoo: vi.fn(),
+  mockLoginWithDebug: vi.fn(),
+  mockFetchAuthState: vi.fn(),
 }));
 
 vi.mock("@shoojs/react", () => {
@@ -45,7 +47,11 @@ vi.mock("@shoojs/react", () => {
   };
 });
 
-vi.mock("@/api/auth", () => ({ loginWithShoo: mockLoginWithShoo }));
+vi.mock("@/api/auth", () => ({
+  fetchAuthState: mockFetchAuthState,
+  loginWithDebug: mockLoginWithDebug,
+  loginWithShoo: mockLoginWithShoo,
+}));
 
 describe("LoginPage", () => {
   beforeEach(() => {
@@ -63,6 +69,8 @@ describe("LoginPage", () => {
       return { pairwise_sub: "user-1", id_token: "id-token" };
     });
     mockLoginWithShoo.mockResolvedValue({ authenticated: true, profile_id: 1 });
+    mockLoginWithDebug.mockReset();
+    mockFetchAuthState.mockResolvedValue({ authenticated: false, debug_auth_enabled: false });
   });
 
   it("verifies callback token with Kestrel before returning to the app", async () => {
