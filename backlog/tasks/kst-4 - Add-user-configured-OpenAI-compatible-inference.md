@@ -4,7 +4,7 @@ title: Add user-configured OpenAI-compatible inference
 status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-11 05:00'
+updated_date: '2026-09-11 05:05'
 labels: []
 dependencies:
   - KST-001
@@ -53,6 +53,8 @@ Implementer: targeted provider/inference suite 240 passed, 9 skipped, 2 warnings
 Release boundary: authenticated live provider UI validation remains blocked at Shoo Google credential prompt; no provider save/test claim made. Code/test gates and anonymous auth boundary are verified.
 
 Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446bd SUCCESS; /health 200 with database connected; anonymous provider API 401. Browser reached Kestrel login and Shoo Google sign-in boundary; no authorized Google credentials, so authenticated provider UI proof remains unavailable.
+
+Focused verification 2026-09-11: provider, inference, MCP, Shoo auth, account isolation, extension ownership, and MCP client tests passed: 152 passed, 2 warnings. Live provider UI remains unverified without authorized Shoo session.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
