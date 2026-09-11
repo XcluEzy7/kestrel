@@ -4,7 +4,7 @@ title: Add authenticated MCP server
 status: Done
 assignee: []
 created_date: '2026-09-10 21:49'
-updated_date: '2026-09-11 05:06'
+updated_date: '2026-09-11 05:07'
 labels: []
 dependencies:
   - KST-001
@@ -46,6 +46,8 @@ Final release validation: Railway deployment 228fdc00-de50-44a3-8c5a-30d7acf446b
 Focused verification 2026-09-11: provider, inference, MCP, Shoo auth, account isolation, extension ownership, and MCP client tests passed: 152 passed, 2 warnings. Live MCP token lifecycle/tool calls remain unverified without authorized Shoo session.
 
 Security acceptance review: focused MCP and auth suite passed 152 tests. Verified token hash lookup, expiry/revocation, account/profile binding, read/write scopes, secret redaction, confirmation gates, audit records, and caller ownership exclusion. Non-blocking follow-ups remain URL scheme validation, token mint rate/cap, CSV transition validation, wildcard escaping, and CSP.
+
+Finalization evidence: AC1 and AC3-AC7 remain supported by focused 152-test run, prior full gates, and live anonymous boundary checks. AC2 remains unchecked: browser reached Shoo Google sign-in but no authorized session existed to create/list/revoke a token or exercise authenticated MCP tools.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -60,5 +62,5 @@ created: 2026-09-10 23:22
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented authenticated Streamable HTTP MCP with account/profile binding, scopes, redaction, confirmations, audit records, and isolation. Verified by focused/full code gates, audit and judge PASS, Railway deployment SUCCESS, live health 200, and anonymous MCP auth rejection. Authenticated token/tool proof stops at Shoo Google sign-in without authorized credentials.
+Delivered authenticated Streamable HTTP MCP with account/profile binding, scopes, redaction, confirmations, audit records, and isolation. Code and anonymous live boundaries verified; authenticated token lifecycle/tool proof remains blocked at Shoo Google sign-in without authorized credentials.
 <!-- SECTION:FINAL_SUMMARY:END -->
