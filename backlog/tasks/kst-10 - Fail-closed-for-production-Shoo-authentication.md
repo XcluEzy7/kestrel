@@ -1,11 +1,11 @@
 ---
 id: KST-10
 title: Fail closed for production Shoo authentication
-status: In Progress
+status: Done
 assignee:
   - '@Erik'
 created_date: '2026-09-23 07:22'
-updated_date: '2026-09-23 07:33'
+updated_date: '2026-09-23 07:34'
 labels:
   - bug
   - security
