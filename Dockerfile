@@ -62,11 +62,13 @@ COPY --from=frontend-build /build/dist ./frontend/dist
 # Ensure data directory exists (will be mounted as a volume)
 RUN mkdir -p /app/data
 
-# Default environment variables
+# Default environment variables. Containers run in production mode, so configure
+# SHOO_AUTH_ENABLED=true in the deployment environment before starting the app.
 ENV AI_PROVIDER=mock \
     DATABASE_URL=sqlite:///data/career_os.db \
     HOST=0.0.0.0 \
     PORT=8100 \
+    PRODUCTION_MODE=true \
     FRONTEND_URL="https://kestrel-production-2597.up.railway.app"
 
 EXPOSE 8100

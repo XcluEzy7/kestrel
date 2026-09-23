@@ -113,6 +113,26 @@ class TestStartupValidation:
         assert s.auth_enabled is True
         assert s.auth_api_key == "my-secret"
 
+    def test_production_mode_requires_shoo_auth(self):
+        from career_os.config import Settings
+
+        with pytest.raises(ValueError, match="SHOO_AUTH_ENABLED is required"):
+            Settings(production_mode=True, shoo_auth_enabled=False)
+
+    def test_production_mode_with_shoo_auth_is_valid(self):
+        from career_os.config import Settings
+
+        s = Settings(production_mode=True, shoo_auth_enabled=True)
+        assert s.production_mode is True
+        assert s.shoo_auth_enabled is True
+
+    def test_local_mode_keeps_shoo_auth_optional(self):
+        from career_os.config import Settings
+
+        s = Settings(production_mode=False, shoo_auth_enabled=False)
+        assert s.production_mode is False
+        assert s.shoo_auth_enabled is False
+
     def test_wildcard_frontend_url_rejected(self):
         from career_os.config import Settings
 

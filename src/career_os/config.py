@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Career OS"
     debug: bool = False
+    # Docker enables production mode; local development keeps legacy anonymous access.
+    production_mode: bool = False
     database_url: str = "sqlite:///data/career_os.db"
     ai_provider: str = "mock"
     openrouter_api_key: str = ""
@@ -250,6 +252,8 @@ class Settings(BaseSettings):
             )
         if self.shoo_auth_enabled and not self.session_cookie_secure:
             raise ValueError("SESSION_COOKIE_SECURE must be true when SHOO_AUTH_ENABLED=true")
+        if self.production_mode and not self.shoo_auth_enabled:
+            raise ValueError("SHOO_AUTH_ENABLED is required when PRODUCTION_MODE=true.")
         return self
 
 

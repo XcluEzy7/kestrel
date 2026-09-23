@@ -341,3 +341,72 @@ def test_head_migration_downgrade_uses_batch_alter_table():
         "plain op.drop_column is not SQLite-safe on pre-3.35 SQLite "
         "(G-1351 review F10)."
     )
+
+
+def test_provider_model_downgrade_rejects_null_without_data_loss(tmp_path):
+    """Refuse to make provider_connections.model NOT NULL while data is NULL."""
+    import sqlite3
+    from contextlib import closing
+
+    import pytest
+    from alembic import command
+
+    db_path = tmp_path / "provider_model_downgrade.db"
+    cfg = Config()
+    cfg.set_main_option("script_location", str(PKG_DIR / "_alembic"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+
+    expected_rows = [
+        (1, 1, "Primary", "openai", "https://api.example.test/v1", "ciphertext", None, 1, "2026-01-01", "2026-01-01"),
+        (2, 1, "Secondary", "openai", "https://api.example.test/v1", None, "gpt-4o", 1, "2026-01-02", "2026-01-02"),
+    ]
+    with closing(sqlite3.connect(db_path)) as con:
+        con.execute(
+            "INSERT INTO accounts (id, pairwise_sub, created_at, updated_at) "
+            "VALUES (1, 'test-account', '2026-01-01', '2026-01-01')"
+        )
+        con.executemany(
+            "INSERT INTO provider_connections "
+            "(id, account_id, display_name, provider_type, base_url, api_key_encrypted, model, enabled, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            expected_rows,
+        )
+        con.commit()
+
+    with pytest.raises(RuntimeError) as error:
+        command.downgrade(cfg, "z9a0b1c2d3e4")
+    assert "1" in str(error.value)
+    assert "NULL model" in str(error.value)
+    assert "assign a real model" in str(error.value).lower()
+    assert "retry" in str(error.value).lower()
+
+    with closing(sqlite3.connect(db_path)) as con:
+        rows = con.execute(
+            "SELECT id, account_id, display_name, provider_type, base_url, api_key_encrypted, "
+            "model, enabled, created_at, updated_at FROM provider_connections ORDER BY id"
+        ).fetchall()
+        assert rows == expected_rows
+        columns = {row[1]: row for row in con.execute("PRAGMA table_info('provider_connections')")}
+        assert columns["model"][3] == 0, "failed downgrade must leave model nullable"
+        con.execute("UPDATE provider_connections SET model = 'gpt-4.1' WHERE id = 1")
+        con.commit()
+
+    expected_rows[0] = (*expected_rows[0][:6], "gpt-4.1", *expected_rows[0][7:])
+    command.downgrade(cfg, "z9a0b1c2d3e4")
+    with closing(sqlite3.connect(db_path)) as con:
+        columns = {row[1]: row for row in con.execute("PRAGMA table_info('provider_connections')")}
+        assert columns["model"][3] == 1
+        rows = con.execute(
+            "SELECT id, account_id, display_name, provider_type, base_url, api_key_encrypted, "
+            "model, enabled, created_at, updated_at FROM provider_connections ORDER BY id"
+        ).fetchall()
+        assert rows == expected_rows
+
+    command.upgrade(cfg, "head")
+    with closing(sqlite3.connect(db_path)) as con:
+        rows = con.execute(
+            "SELECT id, account_id, display_name, provider_type, base_url, api_key_encrypted, "
+            "model, enabled, created_at, updated_at FROM provider_connections ORDER BY id"
+        ).fetchall()
+        assert rows == expected_rows

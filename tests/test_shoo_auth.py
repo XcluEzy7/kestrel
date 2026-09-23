@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from career_os.config import settings
+from career_os.config import Settings, settings
 from career_os.main import app
 from career_os.models.auth import Account, AuthSession
 from career_os.models.models import Application, Profile
@@ -72,6 +72,36 @@ def _client(token: str, csrf: str) -> TestClient:
     client.cookies.set(settings.session_cookie_name, token)
     client.cookies.set("kestrel_csrf", csrf)
     return client
+
+
+def test_production_configured_app_rejects_anonymous_profile_listing(
+    db_session: Session, monkeypatch
+):
+    """The production-configured app never serves account profiles anonymously."""
+    production_settings = Settings(production_mode=True, shoo_auth_enabled=True)
+    monkeypatch.setattr(settings, "production_mode", production_settings.production_mode)
+    monkeypatch.setattr(settings, "shoo_auth_enabled", production_settings.shoo_auth_enabled)
+    _, profile, _, _ = _account(db_session, "ps_production", 10)
+
+    response = TestClient(app, base_url="https://testserver").get("/api/profiles")
+
+    assert response.status_code == 401
+    assert profile.name not in response.text
+
+
+def test_local_configured_app_keeps_unauthenticated_profile_access(
+    db_session: Session, monkeypatch
+):
+    """Explicit local mode preserves legacy unauthenticated development behavior."""
+    local_settings = Settings(production_mode=False, shoo_auth_enabled=False)
+    monkeypatch.setattr(settings, "production_mode", local_settings.production_mode)
+    monkeypatch.setattr(settings, "shoo_auth_enabled", local_settings.shoo_auth_enabled)
+    _, profile, _, _ = _account(db_session, "ps_local", 11)
+
+    response = TestClient(app, base_url="https://testserver").get("/api/profiles")
+
+    assert response.status_code == 200
+    assert response.json()["profiles"][0]["name"] == profile.name
 
 
 def test_session_route_matrix_and_csrf(db_session: Session, monkeypatch):
