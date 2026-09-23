@@ -1,7 +1,7 @@
 ---
 id: KST-9
 title: Keep provider-model downgrade safe with nullable data
-status: In Progress
+status: Done
 assignee:
   - '@Erik'
 created_date: '2026-09-23 07:22'
