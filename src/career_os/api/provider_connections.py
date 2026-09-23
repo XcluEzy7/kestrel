@@ -23,8 +23,8 @@ from career_os.schemas.provider_connections import (
 from career_os.services.provider_connections import (
     complete,
     create_connection,
-    discover_models,
     discover_draft_models,
+    discover_models,
     get_connection,
     list_connections,
     test_connection,
@@ -65,7 +65,9 @@ async def create_provider_connection(
             row = get_connection(db, owner, response.id)
             try:
                 discovered = await discover_models(row)
-                row.model = next((item.strip() for item in discovered.models if item.strip()), "") or None
+                row.model = (
+                    next((item.strip() for item in discovered.models if item.strip()), "") or None
+                )
                 if row.model is None:
                     raise ValueError("Provider did not report a usable model")
                 db.commit()

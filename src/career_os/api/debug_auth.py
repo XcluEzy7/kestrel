@@ -7,11 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from career_os.api.shoo_auth import set_session_cookies
 from career_os.config import settings
 from career_os.database import get_db
-from career_os.models.auth import Account
 from career_os.services.auth import account_for_claims, create_session, default_profile
-from career_os.api.shoo_auth import set_session_cookies
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 DEBUG_PAIRWISE_SUB = "debug:kst-6"
